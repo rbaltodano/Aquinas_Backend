@@ -43,6 +43,7 @@ class DynamicDefinitionRecord:
     pronunciation: str
     definition: str
     example: str
+    context: str = ""
 
 
 class InsightTreeStore:
@@ -115,6 +116,7 @@ class InsightTreeStore:
                     pronunciation TEXT NOT NULL,
                     definition TEXT NOT NULL,
                     example TEXT NOT NULL,
+                    context TEXT NOT NULL DEFAULT '',
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     PRIMARY KEY (conversation_id, term_key, source_hash),
@@ -189,6 +191,12 @@ class InsightTreeStore:
             )
             self._ensure_column(
                 connection, "response_tree_analyses", "mutation_id", "TEXT"
+            )
+            self._ensure_column(
+                connection,
+                "dynamic_definitions",
+                "context",
+                "TEXT NOT NULL DEFAULT ''",
             )
 
     def load_nodes(self, conversation_id: str) -> list[TreeNode]:
@@ -278,13 +286,16 @@ class InsightTreeStore:
                     connection.execute(
                         """
                         UPDATE nodes
-                        SET embedding_json = ?, embedding_model = ?, embedding_version = ?
+                        SET embedding_json = ?, embedding_model = ?, embedding_version = ?,
+                            needs_generated_label = CASE
+                                WHEN ? THEN 1 ELSE needs_generated_label END
                         WHERE id = ?
                         """,
                         (
                             self._encode_embedding(node_embedding),
                             DEFAULT_MODEL_NAME,
                             EMBEDDING_VERSION,
+                            int(decision.needs_generated_label),
                             decision.node_id,
                         ),
                     )
@@ -340,7 +351,7 @@ class InsightTreeStore:
     ) -> AssignmentDecision | None:
         """Replace an automatic term alias with its manually saved definition.
 
-        Response extraction occasionally names a seed ``"<term> defined"`` or
+        Response extraction occasionally names a candidate ``"<term> defined"`` or
         ``"<term> definition"``. When that highlighted term is later bookmarked,
         it is the same conceptual Insight, not a second tree member.
         """
@@ -424,6 +435,19 @@ class InsightTreeStore:
                 """,
                 (owner_node_id, conversation_id),
             ).fetchone()
+            needs_generated_label = bool(owner["needs_generated_label"]) if owner else False
+            if owner is not None and (
+                self._canonical_tree_title_key(owner["label"])
+                == self._canonical_tree_title_key(insight.title)
+            ):
+                needs_generated_label = True
+                connection.execute(
+                    """
+                    UPDATE nodes SET needs_generated_label = 1
+                    WHERE id = ? AND conversation_id = ?
+                    """,
+                    (owner_node_id, conversation_id),
+                )
             stored = connection.execute(
                 """
                 SELECT relatedness, distance, embedding_json
@@ -451,7 +475,7 @@ class InsightTreeStore:
                 distance=stored["distance"],
                 member_insight_ids=member_ids,
                 evaluated_nodes=(),
-                needs_generated_label=bool(owner["needs_generated_label"]),
+                needs_generated_label=needs_generated_label,
                 insight_embedding=self._decode_embedding(stored["embedding_json"]),
             )
 
@@ -655,6 +679,7 @@ class InsightTreeStore:
         branch_id: str,
         extraction,
         provider: MiniLMRelatednessProvider,
+        engine: InsightTreeEngine = insight_tree_engine,
         membership_threshold: float = DEFAULT_MEMBERSHIP_THRESHOLD,
     ) -> dict:
         """Atomically filter, assign, persist, and connect one generated update."""
@@ -682,71 +707,173 @@ class InsightTreeStore:
                 """,
                 (conversation_id,),
             ).fetchall()
-            node_rows = connection.execute(
-                """
-                SELECT id, embedding_json
-                FROM nodes
-                WHERE conversation_id = ?
-                ORDER BY created_at, id
-                """,
-                (conversation_id,),
-            ).fetchall()
-            node_embeddings = {
-                row["id"]: self._decode_embedding(row["embedding_json"])
-                for row in node_rows
-            }
-            new_nodes: list[tuple[str, str, str, str | None, Embedding]] = []
-            if extraction.node_seed is not None:
-                seed = extraction.node_seed
-                seed_embedding = provider.embed(
-                    f"{seed.label.strip()}. {seed.summary.strip()}"
+            nodes = self.load_nodes(conversation_id)
+            added_insight_ids: list[str] = []
+            added_node_ids: list[str] = []
+
+            if extraction.insight_candidate is not None:
+                candidate = extraction.insight_candidate
+                candidate_id = self._stable_id(
+                    f"{conversation_id}:{response_id}:automatic-insight:"
+                    f"{self._title_key(candidate.label)}"
                 )
+                candidate_insight = TreeInsight(
+                    id=candidate_id,
+                    title=candidate.label,
+                    definition=candidate.summary,
+                )
+                candidate_embedding = provider.embed(candidate_insight.semantic_text)
                 is_duplicate = any(
                     provider.compare_embeddings(
-                        seed_embedding,
+                        candidate_embedding,
                         self._decode_embedding(row["embedding_json"]),
                     )["similarity"] >= INSIGHT_DUPLICATE_THRESHOLD
                     for row in existing_insights
-                ) or any(
-                    provider.compare_embeddings(seed_embedding, node_embedding)[
-                        "similarity"
-                    ] >= INSIGHT_DUPLICATE_THRESHOLD
-                    for node_embedding in node_embeddings.values()
                 )
                 if not is_duplicate:
-                    new_nodes.append(
-                        (
-                            self._stable_id(
-                                f"{conversation_id}:{response_id}:node-seed:"
-                                f"{self._title_key(seed.label)}"
-                            ),
-                            seed.label,
-                            seed.summary,
-                            None,
-                            seed_embedding,
-                        )
+                    decision = engine.assign_new_insight(
+                        insight=TreeInsight(
+                            id=candidate_id,
+                            title=candidate.label,
+                            definition=candidate.summary,
+                            embedding=candidate_embedding,
+                        ),
+                        nodes=nodes,
+                        membership_threshold=membership_threshold,
+                        suggested_node_label=(
+                            extraction.subject_label or candidate.label
+                        ),
                     )
+                    existing_owner = next(
+                        (node for node in nodes if node.id == decision.node_id),
+                        None,
+                    )
+                    member_embeddings = (
+                        [
+                            member.embedding
+                            for member in existing_owner.insights
+                            if member.embedding is not None
+                        ]
+                        if existing_owner is not None
+                        else []
+                    )
+                    member_embeddings.append(decision.insight_embedding)
+                    node_embedding = provider.centroid(member_embeddings)
+
+                    if decision.action == "created":
+                        connection.execute(
+                            """
+                            INSERT INTO nodes(
+                                id, conversation_id, label, summary, embedding_json,
+                                embedding_model, embedding_version,
+                                needs_generated_label, is_seed
+                            )
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
+                            """,
+                            (
+                                decision.node_id,
+                                conversation_id,
+                                decision.node_label,
+                                extraction.subject_summary,
+                                self._encode_embedding(node_embedding),
+                                DEFAULT_MODEL_NAME,
+                                EMBEDDING_VERSION,
+                                int(decision.needs_generated_label),
+                            ),
+                        )
+                        added_node_ids.append(decision.node_id)
+                    else:
+                        connection.execute(
+                            """
+                            UPDATE nodes
+                            SET embedding_json = ?, embedding_model = ?,
+                                embedding_version = ?,
+                                needs_generated_label = CASE
+                                    WHEN ? THEN 1 ELSE needs_generated_label END
+                            WHERE id = ? AND conversation_id = ?
+                            """,
+                            (
+                                self._encode_embedding(node_embedding),
+                                DEFAULT_MODEL_NAME,
+                                EMBEDDING_VERSION,
+                                int(decision.needs_generated_label),
+                                decision.node_id,
+                                conversation_id,
+                            ),
+                        )
+
+                    member_scores: dict[str, dict[str, float]] = {}
+                    if existing_owner is not None:
+                        for member in existing_owner.insights:
+                            if member.embedding is None:
+                                raise ValueError(
+                                    "A saved Insight is missing its embedding."
+                                )
+                            member_scores[member.id] = (
+                                provider.compare_embeddings(
+                                    member.embedding,
+                                    node_embedding,
+                                )
+                            )
+                    member_scores[candidate_id] = provider.compare_embeddings(
+                        decision.insight_embedding,
+                        node_embedding,
+                    )
+                    candidate_score = member_scores[candidate_id]
+                    connection.execute(
+                        """
+                        INSERT INTO insights(
+                            id, conversation_id, owning_node_id, title, definition,
+                            embedding_json, embedding_model, embedding_version,
+                            relatedness, distance, source_type, source_response_id,
+                            source_branch_id, evidence_excerpt, extraction_role
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            candidate_id,
+                            conversation_id,
+                            decision.node_id,
+                            candidate.label,
+                            candidate.summary,
+                            self._encode_embedding(decision.insight_embedding),
+                            DEFAULT_MODEL_NAME,
+                            EMBEDDING_VERSION,
+                            candidate_score["relatedness"],
+                            candidate_score["distance"],
+                            "automatic_response",
+                            response_id,
+                            branch_id,
+                            candidate.evidence_excerpt,
+                            "durable_insight",
+                        ),
+                    )
+                    for insight_id, score in member_scores.items():
+                        connection.execute(
+                            """
+                            UPDATE insights
+                            SET relatedness = ?, distance = ?
+                            WHERE id = ? AND owning_node_id = ?
+                            """,
+                            (
+                                score["relatedness"],
+                                score["distance"],
+                                insight_id,
+                                decision.node_id,
+                            ),
+                        )
+                    added_insight_ids.append(candidate_id)
             elif (
-                not node_embeddings
+                not nodes
                 and extraction.subject_label
                 and extraction.subject_summary
             ):
-                new_nodes.append(
-                    (
-                        self._stable_id(
-                            f"{conversation_id}:{response_id}:subject-node"
-                        ),
-                        extraction.subject_label,
-                        extraction.subject_summary,
-                        None,
-                        provider.embed(
-                            f"{extraction.subject_label}. "
-                            f"{extraction.subject_summary}"
-                        ),
-                    )
+                subject_node_id = self._stable_id(
+                    f"{conversation_id}:{response_id}:subject-node"
                 )
-
-            for node_id, label, summary, origin_node_id, embedding in new_nodes:
+                subject_embedding = provider.embed(
+                    f"{extraction.subject_label}. {extraction.subject_summary}"
+                )
                 connection.execute(
                     """
                     INSERT INTO nodes(
@@ -754,25 +881,22 @@ class InsightTreeStore:
                         embedding_model, embedding_version, needs_generated_label,
                         origin_node_id, is_seed
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 0, NULL, 1)
                     """,
                     (
-                        node_id,
+                        subject_node_id,
                         conversation_id,
-                        label,
-                        summary,
-                        self._encode_embedding(embedding),
+                        extraction.subject_label,
+                        extraction.subject_summary,
+                        self._encode_embedding(subject_embedding),
                         DEFAULT_MODEL_NAME,
                         EMBEDDING_VERSION,
-                        origin_node_id,
-                        1,
-                    ),
+                    )
                 )
+                added_node_ids.append(subject_node_id)
 
-            added_insight_ids: list[str] = []
             self._rebuild_node_edges(connection, conversation_id, provider)
 
-            added_node_ids = [node[0] for node in new_nodes]
             did_mutate = bool(added_insight_ids or added_node_ids)
             result = {
                 "status": "updated" if did_mutate else "no_change",
@@ -1005,6 +1129,21 @@ class InsightTreeStore:
 
     def snapshot(self, conversation_id: str) -> dict:
         with self._connect() as connection:
+            dynamic_rows = connection.execute(
+                """
+                SELECT term_key, title, definition, context
+                FROM dynamic_definitions
+                WHERE conversation_id = ?
+                ORDER BY updated_at DESC, created_at DESC, source_hash DESC
+                """,
+                (conversation_id,),
+            ).fetchall()
+            conversation_definitions: dict[str, sqlite3.Row] = {}
+            for row in dynamic_rows:
+                for candidate in (row["term_key"], row["title"]):
+                    key = self._canonical_tree_title_key(candidate)
+                    conversation_definitions.setdefault(key, row)
+
             node_rows = connection.execute(
                 """
                 SELECT id, label, summary, needs_generated_label, origin_node_id
@@ -1028,14 +1167,36 @@ class InsightTreeStore:
                     """,
                     (conversation_id, node["id"]),
                 ).fetchall()
+                serialized_insights = []
+                for row in insight_rows:
+                    serialized = dict(row)
+                    if row["source_type"] == "saved_definition":
+                        contextual = conversation_definitions.get(
+                            self._canonical_tree_title_key(row["title"])
+                        )
+                        if contextual is not None:
+                            context = contextual["context"].strip()
+                            definition = contextual["definition"].strip()
+                            serialized["definition"] = (
+                                f"{context}: {definition}" if context else definition
+                            )
+                    serialized_insights.append(serialized)
+                label_matches_insight = any(
+                    self._canonical_tree_title_key(node["label"])
+                    == self._canonical_tree_title_key(row["title"])
+                    for row in insight_rows
+                )
                 nodes.append(
                     {
                         "id": node["id"],
                         "label": node["label"],
                         "summary": node["summary"],
-                        "needs_generated_label": bool(node["needs_generated_label"]),
+                        "needs_generated_label": (
+                            bool(node["needs_generated_label"])
+                            or label_matches_insight
+                        ),
                         "origin_node_id": node["origin_node_id"],
-                        "insights": [dict(row) for row in insight_rows],
+                        "insights": serialized_insights,
                     }
                 )
 
@@ -1072,7 +1233,7 @@ class InsightTreeStore:
         with self._connect() as connection:
             row = connection.execute(
                 """
-                SELECT title, part_of_speech, pronunciation, definition, example
+                SELECT title, part_of_speech, pronunciation, definition, example, context
                 FROM dynamic_definitions
                 WHERE conversation_id = ? AND term_key = ? AND source_hash = ?
                 """,
@@ -1086,6 +1247,7 @@ class InsightTreeStore:
                 pronunciation=row["pronunciation"],
                 definition=row["definition"],
                 example=row["example"],
+                context=row["context"],
             )
 
     def save_dynamic_definition(
@@ -1106,9 +1268,9 @@ class InsightTreeStore:
                 """
                 INSERT INTO dynamic_definitions(
                     conversation_id, term_key, source_hash, requested_term, source_excerpt,
-                    title, part_of_speech, pronunciation, definition, example
+                    title, part_of_speech, pronunciation, definition, example, context
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(conversation_id, term_key, source_hash) DO UPDATE SET
                     requested_term = excluded.requested_term,
                     source_excerpt = excluded.source_excerpt,
@@ -1117,6 +1279,7 @@ class InsightTreeStore:
                     pronunciation = excluded.pronunciation,
                     definition = excluded.definition,
                     example = excluded.example,
+                    context = excluded.context,
                     updated_at = CURRENT_TIMESTAMP
                 """,
                 (
@@ -1130,6 +1293,7 @@ class InsightTreeStore:
                     definition.pronunciation,
                     definition.definition,
                     definition.example,
+                    definition.context,
                 ),
             )
 
@@ -1300,6 +1464,7 @@ class PersistentInsightTreeService:
                 branch_id=branch_id,
                 extraction=extraction,
                 provider=self.provider,
+                engine=self.engine,
             )
 
 

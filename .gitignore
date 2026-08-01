@@ -1,7 +1,9 @@
 __pycache__/
 *.py[cod]
 aquinas_env/
+litert_conversion_env/
 aquinas_memory/
 models/
+evaluation/results/
 data/
 .DS_Store

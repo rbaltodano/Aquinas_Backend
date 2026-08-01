@@ -1,10 +1,15 @@
 from contextlib import asynccontextmanager
+import base64
+import binascii
 import hashlib
+from io import BytesIO
 import json
+import time
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel, Field, field_validator
 
 from insight_tree import (
@@ -13,13 +18,29 @@ from insight_tree import (
     TreeNode,
     insight_tree_engine,
 )
-from main import ask_aquinas, generate_aquinas, generate_aquinas_stream
+from main import (
+    GenerationPreempted,
+    ask_aquinas,
+    generate_aquinas,
+    generate_aquinas_background,
+    generate_aquinas_background_fast,
+    generate_aquinas_fast,
+    generate_aquinas_stream,
+)
 from relatedness import relatedness_provider
 from structured_generation import (
     AquinasGenerationService,
+    ConversationGenerationMode,
+    ConversationImage,
     ConversationMessage,
+    ConversationPersonality,
     ConversationStreamParser,
+    ContextualDefinition,
+    DailyQuestionInsight,
+    GeneratedDailyQuestion,
     StructuredGenerationError,
+    requested_definition_term,
+    resolve_conversation_generation_mode,
 )
 from tree_store import DynamicDefinitionRecord, persistent_tree_service, tree_store
 
@@ -33,7 +54,12 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="Aquinas Logic API", lifespan=lifespan)
-generation_service = AquinasGenerationService(generate_aquinas)
+generation_service = AquinasGenerationService(
+    generate_aquinas,
+    fast_generator=generate_aquinas_fast,
+    background_generator=generate_aquinas_background,
+    background_fast_generator=generate_aquinas_background_fast,
+)
 
 # This allows your web frontend to talk to this backend without security blocks
 app.add_middleware(
@@ -49,9 +75,42 @@ class QueryRequest(BaseModel):
     query: str
 
 
+class ConversationImagePayload(BaseModel):
+    name: str = Field(default="Image", max_length=200)
+    media_type: str = Field(pattern=r"^image/(?:jpeg|png|webp)$")
+    data_base64: str = Field(min_length=1, max_length=5_000_000)
+
+    @field_validator("data_base64")
+    @classmethod
+    def image_must_be_valid_and_bounded(cls, value: str) -> str:
+        try:
+            data = base64.b64decode(value, validate=True)
+        except (binascii.Error, ValueError) as error:
+            raise ValueError("Image data must be valid base64.") from error
+        if len(data) > 3_750_000:
+            raise ValueError("Each image must be 3.75 MB or smaller.")
+        try:
+            with Image.open(BytesIO(data)) as image:
+                width, height = image.size
+                if width * height > 25_000_000:
+                    raise ValueError("Image dimensions are too large.")
+                image.verify()
+        except (UnidentifiedImageError, OSError) as error:
+            raise ValueError("Attachment is not a supported image.") from error
+        return value
+
+    def to_domain(self) -> ConversationImage:
+        return ConversationImage(
+            name=self.name,
+            media_type=self.media_type,
+            data=base64.b64decode(self.data_base64, validate=True),
+        )
+
+
 class ConversationMessagePayload(BaseModel):
     role: str = Field(min_length=1, max_length=20)
     text: str = Field(min_length=1, max_length=8_000)
+    images: list[ConversationImagePayload] = Field(default_factory=list, max_length=8)
 
     @field_validator("role")
     @classmethod
@@ -62,7 +121,11 @@ class ConversationMessagePayload(BaseModel):
         return cleaned
 
     def to_domain(self) -> ConversationMessage:
-        return ConversationMessage(role=self.role, text=self.text)
+        return ConversationMessage(
+            role=self.role,
+            text=self.text,
+            images=tuple(image.to_domain() for image in self.images),
+        )
 
 
 class ContextualDefinitionRequest(BaseModel):
@@ -88,6 +151,47 @@ class ContextualDefinitionResponse(BaseModel):
     pronunciation: str
     definition: str
     example: str
+    context: str = ""
+
+
+class MidpointConceptPayload(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    definition: str = Field(default="", max_length=4_000)
+    example: str = Field(default="", max_length=4_000)
+
+    @field_validator("title")
+    @classmethod
+    def title_must_not_be_blank(cls, value: str) -> str:
+        cleaned = " ".join(value.split())
+        if not cleaned:
+            raise ValueError("Concept title cannot be blank.")
+        return cleaned
+
+    def to_domain(self) -> ContextualDefinition:
+        return ContextualDefinition(
+            title=self.title,
+            part_of_speech="",
+            pronunciation="",
+            definition=self.definition,
+            example=self.example,
+        )
+
+
+class MidpointBlendRequest(BaseModel):
+    concepts: list[MidpointConceptPayload] = Field(min_length=2, max_length=8)
+    weights: list[float] = Field(min_length=2, max_length=8)
+
+
+class MidpointCandidatesResponse(BaseModel):
+    candidates: list[ContextualDefinitionResponse]
+
+
+class MakeNodeChildrenRequest(BaseModel):
+    concept: MidpointConceptPayload
+
+
+class MakeNodeChildrenResponse(BaseModel):
+    children: list[ContextualDefinitionResponse]
 
 
 class ConversationResponseRequest(BaseModel):
@@ -97,6 +201,8 @@ class ConversationResponseRequest(BaseModel):
     )
     compacted_context: str | None = Field(default=None, max_length=20_000)
     thinking_enabled: bool = False
+    generation_mode: ConversationGenerationMode = ConversationGenerationMode.AUTOMATIC
+    personality: ConversationPersonality = ConversationPersonality.BALANCED
 
 
 class ConversationCompactionRequest(BaseModel):
@@ -111,6 +217,26 @@ class ConversationCompactionResponse(BaseModel):
     summary: str
 
 
+class DailyQuestionInsightPayload(BaseModel):
+    title: str = Field(min_length=1, max_length=300)
+    definition: str = Field(min_length=1, max_length=4_000)
+
+
+class DailyQuestionRequest(BaseModel):
+    conversation_title: str = Field(default="", max_length=300)
+    recent_messages: list[ConversationMessagePayload] = Field(
+        min_length=1,
+        max_length=20,
+    )
+    insights: list[DailyQuestionInsightPayload] = Field(default_factory=list, max_length=4)
+
+
+class DailyQuestionResponse(BaseModel):
+    question: str
+    reason_for_asking: str
+    cited_insight_title: str | None = None
+
+
 class GeneratedKeyTermResponse(BaseModel):
     display_text: str
     canonical_term: str
@@ -121,6 +247,7 @@ class StructuredConversationResponsePayload(BaseModel):
     response: str
     thinking_summary: list[str]
     key_terms: list[GeneratedKeyTermResponse]
+    insight: ContextualDefinitionResponse | None = None
 
 
 class SimilarityPair(BaseModel):
@@ -158,7 +285,6 @@ class NodeSubjectRequest(BaseModel):
 
 class NodeSubjectResponse(BaseModel):
     label: str
-    summary: str
 
 
 class NodeLabelRequest(BaseModel):
@@ -361,6 +487,7 @@ def _definition_response(record: DynamicDefinitionRecord) -> ContextualDefinitio
         pronunciation=record.pronunciation,
         definition=record.definition,
         example=record.example,
+        context=record.context,
     )
 
 
@@ -394,6 +521,7 @@ def define_contextual_term(request: ContextualDefinitionRequest):
             pronunciation=definition.pronunciation,
             definition=definition.definition,
             example=definition.example,
+            context=definition.context,
         )
     except StructuredGenerationError as error:
         raise HTTPException(
@@ -455,6 +583,7 @@ def define_contextual_term_for_conversation(
             pronunciation=definition.pronunciation,
             definition=definition.definition,
             example=definition.example,
+            context=definition.context,
         )
         tree_store.save_dynamic_definition(
             conversation_id=conversation_id,
@@ -485,6 +614,8 @@ def respond_to_conversation(request: ConversationResponseRequest):
             ],
             compacted_context=request.compacted_context,
             thinking_enabled=request.thinking_enabled,
+            generation_mode=request.generation_mode,
+            personality=request.personality,
         )
         return StructuredConversationResponsePayload(
             response=result.response,
@@ -497,6 +628,18 @@ def respond_to_conversation(request: ConversationResponseRequest):
                 )
                 for term in result.key_terms
             ],
+            insight=(
+                ContextualDefinitionResponse(
+                    title=result.insight.title,
+                    part_of_speech=result.insight.part_of_speech,
+                    pronunciation=result.insight.pronunciation,
+                    definition=result.insight.definition,
+                    example=result.insight.example,
+                    context=result.insight.context,
+                )
+                if result.insight is not None
+                else None
+            ),
         )
     except StructuredGenerationError as error:
         raise HTTPException(
@@ -505,24 +648,72 @@ def respond_to_conversation(request: ConversationResponseRequest):
         ) from error
 
 
+@app.post("/home/question-of-the-day", response_model=DailyQuestionResponse)
+def generate_question_of_the_day(request: DailyQuestionRequest):
+    try:
+        result: GeneratedDailyQuestion = generation_service.generate_daily_question(
+            conversation_title=request.conversation_title,
+            recent_messages=[
+                message.to_domain()
+                for message in request.recent_messages
+            ],
+            insights=[
+                DailyQuestionInsight(
+                    title=insight.title,
+                    definition=insight.definition,
+                )
+                for insight in request.insights
+            ],
+        )
+        return DailyQuestionResponse(
+            question=result.question,
+            reason_for_asking=result.rationale,
+            cited_insight_title=result.cited_insight_title,
+        )
+    except StructuredGenerationError as error:
+        raise HTTPException(
+            status_code=502,
+            detail="Aquinas did not return a valid Question of the Day.",
+        ) from error
+
+
 @app.post("/conversation/respond/stream")
 def stream_conversation_response(request: ConversationResponseRequest):
     messages = [message.to_domain() for message in request.recent_messages]
+    images = generation_service.conversation_images(messages)
+    required_insight_term = requested_definition_term(messages)
+    resolved_mode = resolve_conversation_generation_mode(
+        messages,
+        request.generation_mode,
+    )
 
     def event_stream():
+        request_started_at = time.perf_counter()
+        first_approved_field_at: float | None = None
         try:
             prompt = generation_service.conversation_prompt(
                 messages,
                 compacted_context=request.compacted_context,
                 thinking_enabled=request.thinking_enabled,
+                generation_mode=resolved_mode,
+                personality=request.personality,
             )
             parser = ConversationStreamParser()
-            raw_output: list[str] = []
+            response_prefix = (
+                "{"
+                if resolved_mode == ConversationGenerationMode.FAST
+                else ""
+            )
+            raw_output: list[str] = [response_prefix] if response_prefix else []
+            if response_prefix:
+                parser.feed(response_prefix)
             has_started = False
 
             for fragment in generate_aquinas_stream(
                 prompt,
                 max_tokens=1_800,
+                response_prefix=response_prefix,
+                images=images,
             ):
                 if not has_started:
                     # `generate_aquinas_stream` serializes access to the model.
@@ -530,9 +721,14 @@ def stream_conversation_response(request: ConversationResponseRequest):
                     # client can distinguish waiting for that lock from active
                     # generation.
                     has_started = True
-                    yield _stream_event("start")
+                    yield _stream_event(
+                        "start",
+                        generation_mode=resolved_mode.value,
+                    )
                 raw_output.append(fragment)
                 for update in parser.feed(fragment):
+                    if first_approved_field_at is None:
+                        first_approved_field_at = time.perf_counter()
                     if update.kind == "thinking_summary":
                         # The checkpoint can still emit a summary after being told
                         # Thinking is disabled. Never serialize that tuple into the
@@ -551,11 +747,13 @@ def stream_conversation_response(request: ConversationResponseRequest):
                     )
 
             result = generation_service.parse_conversation_output(
-                "".join(raw_output)
+                "".join(raw_output),
+                required_insight_term=required_insight_term,
             )
             yield _stream_event(
                 "complete",
                 response=result.response,
+                generation_mode=resolved_mode.value,
                 thinking_summary=(
                     list(result.thinking_summary)
                     if request.thinking_enabled
@@ -569,6 +767,33 @@ def stream_conversation_response(request: ConversationResponseRequest):
                     }
                     for term in result.key_terms
                 ],
+                insight=(
+                    {
+                        "title": result.insight.title,
+                        "part_of_speech": result.insight.part_of_speech,
+                        "pronunciation": result.insight.pronunciation,
+                        "definition": result.insight.definition,
+                        "example": result.insight.example,
+                    }
+                    if result.insight is not None
+                    else None
+                ),
+            )
+            completed_at = time.perf_counter()
+            print(
+                json.dumps(
+                    {
+                        "event": "conversation_response_complete",
+                        "generation_mode": resolved_mode.value,
+                        "first_approved_field_seconds": (
+                            first_approved_field_at - request_started_at
+                            if first_approved_field_at is not None
+                            else None
+                        ),
+                        "total_seconds": completed_at - request_started_at,
+                        "repair_used": False,
+                    }
+                )
             )
         except Exception:
             yield _stream_event(
@@ -640,11 +865,69 @@ def relatedness_similarity(request: SimilarityRequest):
 def label_insight_tree_node(request: NodeSubjectRequest):
     try:
         subject = generation_service.label_tree_subject(request.insight_descriptions)
-        return NodeSubjectResponse(label=subject.label, summary=subject.summary)
+        return NodeSubjectResponse(label=subject.label)
     except StructuredGenerationError as error:
         raise HTTPException(
             status_code=502,
             detail="Aquinas did not return a valid Node subject.",
+        ) from error
+
+
+@app.post("/concept/blend", response_model=MidpointCandidatesResponse)
+def blend_midpoint_concepts(request: MidpointBlendRequest):
+    if len(request.concepts) != len(request.weights):
+        raise HTTPException(
+            status_code=400,
+            detail="Every Midpoint concept must have one weight.",
+        )
+    try:
+        candidates = generation_service.blend_concept_candidates(
+            [concept.to_domain() for concept in request.concepts],
+            request.weights,
+        )
+        return MidpointCandidatesResponse(
+            candidates=[
+                ContextualDefinitionResponse(
+                    title=candidate.title,
+                    part_of_speech=candidate.part_of_speech,
+                    pronunciation=candidate.pronunciation,
+                    definition=candidate.definition,
+                    example=candidate.example,
+                    context=candidate.context,
+                )
+                for candidate in candidates
+            ]
+        )
+    except StructuredGenerationError as error:
+        raise HTTPException(
+            status_code=502,
+            detail="Aquinas did not return a valid Midpoint Insight.",
+        ) from error
+
+
+@app.post("/concept/children", response_model=MakeNodeChildrenResponse)
+def generate_make_node_children(request: MakeNodeChildrenRequest):
+    try:
+        children = generation_service.generate_concept_children(
+            request.concept.to_domain()
+        )
+        return MakeNodeChildrenResponse(
+            children=[
+                ContextualDefinitionResponse(
+                    title=child.title,
+                    part_of_speech=child.part_of_speech,
+                    pronunciation=child.pronunciation,
+                    definition=child.definition,
+                    example=child.example,
+                    context=child.context,
+                )
+                for child in children
+            ]
+        )
+    except StructuredGenerationError as error:
+        raise HTTPException(
+            status_code=502,
+            detail="Aquinas did not return three valid Make Node Insights.",
         ) from error
 
 
@@ -770,6 +1053,11 @@ def analyze_response_for_tree(
             raise HTTPException(
                 status_code=502,
                 detail="Aquinas did not return a valid Insight Tree update.",
+            ) from error
+        except GenerationPreempted as error:
+            raise HTTPException(
+                status_code=409,
+                detail="Insight Tree analysis was deferred for foreground model work.",
             ) from error
         except ValueError as error:
             raise HTTPException(status_code=400, detail=str(error)) from error

@@ -1,0 +1,769 @@
+[
+  {
+    "id": "conversation-simple-proportionate",
+    "operation": "conversation",
+    "description": "A simple factual inquiry should receive a direct answer of proportionate length.",
+    "tags": ["representative", "length", "thinking-summary"],
+    "input": {
+      "recent_messages": [{"role": "user", "text": "What is prudence?"}],
+      "thinking_enabled": true,
+      "generation_mode": "automatic",
+      "personality": "balanced"
+    },
+    "checks": [
+      {"type": "nonempty", "path": "response"},
+      {"type": "max_words", "path": "response", "value": 120},
+      {"type": "count_at_most", "path": "thinking_summary", "value": 3},
+      {"type": "count_at_most", "path": "key_terms", "value": 8},
+      {"type": "not_null", "path": "insight"},
+      {
+        "type": "not_contains_ci",
+        "path": "$",
+        "values": ["as stated by Gregory", "Gregory the Great"]
+      }
+    ],
+    "rubrics": [
+      {"id": "accuracy", "criterion": "The Insight accurately defines prudence as the intellectual virtue perfecting practical reason in deliberating, judging, and directing action toward good ends."},
+      {"id": "proportion", "criterion": "After the Insight card, the visible response gives a concise substantive explanation of prudence rather than only introducing or duplicating the card."},
+      {"id": "summary", "criterion": "Any public approach notes are specific, concise, and do not expose scratch work or repeat the answer."}
+    ]
+  },
+  {
+    "id": "conversation-direct-definition",
+    "operation": "conversation",
+    "description": "Broad direct-definition wording must produce a complete in-text Insight.",
+    "tags": ["adversarial", "definition-detection", "insight"],
+    "input": {
+      "recent_messages": [
+        {
+          "role": "assistant",
+          "text": "Created beings do not possess existence essentially. They receive it in a limited way and therefore participate in existence."
+        },
+        {"role": "user", "text": "What does participation mean here?"}
+      ],
+      "thinking_enabled": true,
+      "generation_mode": "automatic",
+      "personality": "fun"
+    },
+    "checks": [
+      {"type": "nonempty", "path": "response"},
+      {"type": "not_null", "path": "insight"},
+      {"type": "nonempty", "path": "insight.title"},
+      {"type": "nonempty", "path": "insight.definition"},
+      {"type": "all_empty", "path": "insight.pronunciation"},
+      {"type": "all_empty", "path": "insight.part_of_speech"},
+      {"type": "all_empty", "path": "insight.example"}
+    ],
+    "rubrics": [
+      {"id": "definition", "criterion": "The Insight precisely defines participation here as receiving or possessing existence in a limited way rather than possessing it essentially."},
+      {"id": "alignment", "criterion": "After the Insight card, the visible response substantively explains how participation functions in this context rather than only introducing or duplicating the card."},
+      {"id": "neutrality", "criterion": "The definition action remains neutral despite the fun conversational personality setting and invents no source or prior attribution."}
+    ]
+  },
+  {
+    "id": "conversation-revises-conclusion",
+    "operation": "conversation",
+    "description": "Aquinas should explicitly revise a defeated premise and propagate the correction.",
+    "tags": ["adversarial", "reasoning-constitution", "revision"],
+    "input": {
+      "recent_messages": [
+        {"role": "user", "text": "Every voluntary action must be explicitly chosen at the moment it occurs."},
+        {"role": "assistant", "text": "Yes. If an act is voluntary, it must be explicitly chosen at the moment of action."},
+        {"role": "user", "text": "But actions flowing from a deliberately acquired habit can be voluntary in their cause even when I do not make a fresh explicit choice each time. Doesn't that contradict your premise?"}
+      ],
+      "thinking_enabled": true,
+      "generation_mode": "automatic",
+      "personality": "scholarly"
+    },
+    "checks": [
+      {"type": "nonempty", "path": "response"},
+      {"type": "max_words", "path": "response", "value": 220},
+      {"type": "count_at_most", "path": "thinking_summary", "value": 3},
+      {"type": "is_null", "path": "insight"},
+      {
+        "type": "not_contains_ci",
+        "path": "response",
+        "values": [
+          "apparent contradiction",
+          "will, which is the act of the intellect",
+          "act of the will is the final cause",
+          "will is the final cause",
+          "act of the intellect, which chooses",
+          "habit itself is a determined end",
+          "premise holds true",
+          "which is the final cause of the act",
+          "final cause"
+        ]
+      }
+    ],
+    "rubrics": [
+      {"id": "revision", "criterion": "The answer clearly acknowledges and corrects the earlier overstatement rather than defending it."},
+      {"id": "scope", "criterion": "The revision is limited to what the counterexample establishes and carries through dependent claims."},
+      {"id": "distinction", "criterion": "The answer distinguishes present explicit choice from voluntariness in cause without overstating certainty."},
+      {"id": "category-accuracy", "criterion": "The answer does not identify will with intellect, treat the will itself as a final cause, or introduce unnecessary causal machinery."}
+    ]
+  },
+  {
+    "id": "conversation-inquire-connection-explain-and-do",
+    "operation": "conversation",
+    "description": "When asked what Inquire Connection means, Aquinas should explain the chip briefly and still perform the relationship analysis.",
+    "tags": ["interface", "inquire-connection", "multi-source"],
+    "input": {
+      "recent_messages": [
+        {
+          "role": "user",
+          "text": "<inquire_connection>\nThe user selected these Tree concepts for relationship analysis:\n1. Prudence — practical wisdom governing action.\n2. Conscience — practical judgment applying moral knowledge.\n3. Synderesis — habitual grasp of first moral principles.\nThe user asks: I don't understand what this chip means. What does it do?"
+        }
+      ],
+      "thinking_enabled": true,
+      "generation_mode": "automatic",
+      "personality": "fun"
+    },
+    "checks": [
+      {"type": "nonempty", "path": "response"},
+      {"type": "min_words", "path": "response", "value": 45},
+      {"type": "is_null", "path": "insight"},
+      {
+        "type": "not_contains_ci",
+        "path": "response",
+        "values": [
+          "faculty that applies",
+          "virtue that governs both",
+          "organized hierarchically",
+          "foundation, application, and governance"
+        ]
+      }
+    ],
+    "rubrics": [
+      {"id": "explanation", "criterion": "The response first explains the chip in brief plain language."},
+      {"id": "type-accuracy", "criterion": "The response preserves synderesis as a habit of first practical principles, conscience as their application in a particular judgment, and prudence as a virtue perfecting practical reasoning."},
+      {"id": "analysis", "criterion": "It then analyzes a real organizing relationship across all three selected concepts rather than stopping at the explanation."},
+      {"id": "non-forced", "criterion": "It identifies complementary roles and important distinctions without forcing a false hierarchy in which prudence simply governs both other concepts."}
+    ]
+  },
+  {
+    "id": "conversation-foundational-and-discovery-highlights",
+    "operation": "conversation",
+    "description": "A concept-rich answer should expose foundational terms and worthwhile discovery paths when naturally available, without highlighting trivia.",
+    "tags": ["highlighting", "foundational", "discovery"],
+    "input": {
+      "recent_messages": [{"role": "user", "text": "How do act, potency, form, and privation work together in Aquinas's account of change?"}],
+      "thinking_enabled": true,
+      "generation_mode": "automatic",
+      "personality": "balanced"
+    },
+    "checks": [
+      {"type": "nonempty", "path": "response"},
+      {"type": "nonempty", "path": "key_terms"},
+      {"type": "count_at_most", "path": "key_terms", "value": 6},
+      {"type": "all_unique", "path": "key_terms.*.display_text"},
+      {
+        "type": "not_contains_ci",
+        "path": "response",
+        "values": [
+          "being as God understands it",
+          "God",
+          "from act to potency",
+          "stone is in privation of the form of a man",
+          "stone is in a state of privation of the form of a tree"
+        ]
+      }
+    ],
+    "rubrics": [
+      {"id": "accuracy", "criterion": "The answer accurately distinguishes potency as a real capacity from privation as the relevant absence of a form, while explaining how form and act complete the account of change."},
+      {"id": "scope", "criterion": "The answer remains focused on Aquinas's philosophical account of change without adding unnecessary divine or devotional framing."},
+      {"id": "foundations", "criterion": "Highlighted terms prioritize concepts necessary to understand the explanation."},
+      {"id": "discovery", "criterion": "Any additional highlighted term opens a meaningful intellectual rabbit hole rather than merely being novel."},
+      {"id": "restraint", "criterion": "The answer avoids highlighting ordinary connective language or overwhelming the reader."}
+    ]
+  },
+  {
+    "id": "conversation-repair-probe",
+    "operation": "conversation",
+    "description": "Malformed conversation JSON should receive exactly one narrow repair using the valid substance already present.",
+    "tags": ["repair", "adversarial"],
+    "repair_probe_output": "response: Unlike mere cleverness, prudence directs practical reasoning toward a genuinely good end rather than merely finding effective means. thinking_summary: [Distinguished effective means from morally sound practical judgment.] key_terms: [] insight: null",
+    "input": {
+      "recent_messages": [{"role": "user", "text": "Briefly distinguish prudence from mere cleverness."}],
+      "thinking_enabled": true,
+      "generation_mode": "deep",
+      "personality": "balanced"
+    },
+    "checks": [
+      {"type": "generation_calls", "value": 2},
+      {"type": "nonempty", "path": "response"},
+      {"type": "count_at_most", "path": "thinking_summary", "value": 3},
+      {"type": "is_null", "path": "insight"}
+    ],
+    "rubrics": [
+      {"id": "preservation", "criterion": "The repair preserves the valid distinction already present instead of replacing it stylistically."},
+      {"id": "non-invention", "criterion": "The repair adds no unsupported claims, examples, or citations."}
+    ]
+  },
+  {
+    "id": "definition-participation-metaphysics",
+    "operation": "definition",
+    "description": "The same term should receive a meaning specific to its metaphysical source context.",
+    "tags": ["representative", "secondary-definition"],
+    "input": {
+      "term": "participation",
+      "source_excerpt": "Created beings possess existence by participation rather than by essence.",
+      "recent_messages": [
+        {"role": "user", "text": "Why are creatures not identical with their act of existence?"},
+        {"role": "assistant", "text": "Created beings possess existence by participation rather than by essence."}
+      ]
+    },
+    "checks": [
+      {"type": "nonempty", "path": "title"},
+      {"type": "nonempty", "path": "context"},
+      {"type": "nonempty", "path": "definition"},
+      {"type": "all_empty", "path": "part_of_speech"},
+      {"type": "all_empty", "path": "pronunciation"},
+      {"type": "all_empty", "path": "example"},
+      {
+        "type": "not_contains_ci",
+        "path": "$",
+        "values": [
+          "bestie",
+          "lol",
+          "😊",
+          "essence of a greater being",
+          "participate in the divine essence"
+        ]
+      }
+    ],
+    "rubrics": [
+      {"id": "contextuality", "criterion": "The definition explains metaphysical participation rather than offering a generic dictionary meaning."},
+      {"id": "neutrality", "criterion": "The wording is neutral, concise, and independent of conversational personality."}
+    ]
+  },
+  {
+    "id": "definition-participation-civic",
+    "operation": "definition",
+    "description": "A second occurrence of the same title should support a distinct civic meaning for the saved Insight card.",
+    "tags": ["adversarial", "secondary-definition"],
+    "input": {
+      "term": "participation",
+      "source_excerpt": "Political participation enables citizens to contribute to deliberation about the common good.",
+      "recent_messages": [
+        {"role": "user", "text": "What role should citizens have in political judgment?"},
+        {"role": "assistant", "text": "Political participation enables citizens to contribute to deliberation about the common good."}
+      ]
+    },
+    "checks": [
+      {"type": "nonempty", "path": "context"},
+      {"type": "nonempty", "path": "definition"},
+      {"type": "all_empty", "path": "part_of_speech"},
+      {"type": "all_empty", "path": "pronunciation"},
+      {"type": "all_empty", "path": "example"}
+    ],
+    "rubrics": [
+      {"id": "distinct-meaning", "criterion": "The definition clearly captures civic participation and would be useful as a secondary meaning beside the metaphysical one."},
+      {"id": "source-fit", "criterion": "It remains faithful to the supplied sentence and conversation rather than broadening into unrelated political theory."}
+    ]
+  },
+  {
+    "id": "definition-repair-probe",
+    "operation": "definition",
+    "description": "Malformed but substantive definition output should be repaired without inventing optional fields.",
+    "tags": ["repair"],
+    "repair_probe_output": "title=Prudence; context=Choosing a fitting means toward a good end; definition=Prudence is practical wisdom that directs concrete action.",
+    "input": {
+      "term": "prudence",
+      "source_excerpt": "Prudence selects fitting means toward the good end.",
+      "recent_messages": [{"role": "assistant", "text": "Prudence selects fitting means toward the good end."}]
+    },
+    "checks": [
+      {"type": "generation_calls", "value": 2},
+      {"type": "nonempty", "path": "context"},
+      {"type": "nonempty", "path": "definition"},
+      {"type": "all_empty", "path": "part_of_speech"},
+      {"type": "all_empty", "path": "pronunciation"},
+      {"type": "all_empty", "path": "example"}
+    ],
+    "rubrics": [
+      {"id": "minimal-repair", "criterion": "The repaired JSON preserves the supplied title, context, and definition with minimal change."},
+      {"id": "non-invention", "criterion": "It does not invent pronunciation, part of speech, or an example."}
+    ]
+  },
+  {
+    "id": "qotd-unresolved-distinction",
+    "operation": "question_of_the_day",
+    "description": "The daily question should continue a specific unresolved distinction rather than test recall.",
+    "tags": ["representative", "grounding"],
+    "input": {
+      "conversation_title": "Mercy and Justice",
+      "recent_messages": [
+        {"role": "user", "text": "Can mercy ever undermine justice?"},
+        {"role": "assistant", "text": "Mercy need not cancel justice, but we have not settled when leniency becomes neglect of what is owed."}
+      ],
+      "insights": [
+        {"title": "Justice", "definition": "The stable disposition to render to each what is due."},
+        {"title": "Mercy", "definition": "Compassion responding to another's misery through fitting aid."}
+      ]
+    },
+    "checks": [
+      {"type": "nonempty", "path": "question"},
+      {"type": "ends_with", "path": "question", "value": "?"},
+      {"type": "nonempty", "path": "rationale"},
+      {"type": "max_words", "path": "question", "value": 35},
+      {"type": "not_contains_ci", "path": "$", "values": ["bestie", "lol", "quiz", "recall"]}
+    ],
+    "rubrics": [
+      {"id": "grounding", "criterion": "The question develops the unresolved boundary between mercy and what justice requires."},
+      {"id": "openness", "criterion": "It invites judgment and reflection without leading toward a predetermined answer."},
+      {"id": "standalone", "criterion": "The question makes sense on its own and asks only one thing."}
+    ]
+  },
+  {
+    "id": "qotd-no-forced-insight-citation",
+    "operation": "question_of_the_day",
+    "description": "An unrelated saved Insight should not be cited merely because it is available.",
+    "tags": ["adversarial", "citation-restraint"],
+    "input": {
+      "conversation_title": "Kinds of Friendship",
+      "recent_messages": [
+        {"role": "user", "text": "How can I tell whether a friendship is based only on utility?"},
+        {"role": "assistant", "text": "A useful next step is to examine what each person values when no immediate benefit is available."}
+      ],
+      "insights": [
+        {"title": "Photosynthesis", "definition": "The process by which plants convert light energy into chemical energy."}
+      ]
+    },
+    "checks": [
+      {"type": "ends_with", "path": "question", "value": "?"},
+      {"type": "nonempty", "path": "rationale"},
+      {"type": "is_null", "path": "cited_insight_title"}
+    ],
+    "rubrics": [
+      {"id": "relevance", "criterion": "The question follows the friendship discussion rather than bending it toward the unrelated Insight."},
+      {"id": "restraint", "criterion": "The model correctly avoids citing an Insight that does not materially contribute."}
+    ]
+  },
+  {
+    "id": "qotd-repair-probe",
+    "operation": "question_of_the_day",
+    "description": "Malformed daily-question output should be repaired once from the original task material.",
+    "tags": ["repair"],
+    "repair_probe_output": "question=Which obligation should guide the choice; reason=The conflict remains unresolved; cited insight=Invented",
+    "input": {
+      "conversation_title": "Conflicting Duties",
+      "recent_messages": [
+        {"role": "user", "text": "What should I do when two real obligations conflict?"},
+        {"role": "assistant", "text": "We identified the conflict but did not determine which obligation is prior."}
+      ],
+      "insights": []
+    },
+    "checks": [
+      {"type": "generation_calls", "value": 2},
+      {"type": "ends_with", "path": "question", "value": "?"},
+      {"type": "nonempty", "path": "rationale"},
+      {"type": "is_null", "path": "cited_insight_title"},
+      {"type": "not_contains_ci", "path": "question", "values": ["one focused question"]}
+    ],
+    "rubrics": [
+      {"id": "minimal-repair", "criterion": "The repair restores the required shape and punctuation while retaining the grounded unresolved conflict."},
+      {"id": "citation", "criterion": "The invented citation is removed rather than replaced with another unsupported title."}
+    ]
+  },
+  {
+    "id": "node-label-single-insight",
+    "operation": "node_label",
+    "description": "A single Insight should be named by its immediate elementary conceptual category.",
+    "tags": ["representative", "elementary-label"],
+    "input": {
+      "insight_descriptions": ["Double Effect. An action with both good and harmful effects may be permissible under strict conditions."]
+    },
+    "checks": [
+      {"type": "nonempty", "path": "label"},
+      {"type": "max_words", "path": "label", "value": 5},
+      {
+        "type": "not_contains_ci",
+        "path": "label",
+        "values": [
+          "key concepts",
+          "understanding",
+          "exploring",
+          "foundations",
+          "moral intention"
+        ]
+      }
+    ],
+    "rubrics": [
+      {"id": "elementary", "criterion": "The label names the immediate conceptual category beneath the Insight rather than paraphrasing its full title."},
+      {"id": "economy", "criterion": "It uses the fewest words that remain precise."}
+    ]
+  },
+  {
+    "id": "node-label-cohesive-cluster",
+    "operation": "node_label",
+    "description": "A cohesive cluster should receive the narrowest elementary category covering every Insight.",
+    "tags": ["representative", "cluster"],
+    "input": {
+      "insight_descriptions": [
+        "Synderesis. Habitual grasp of first practical principles.",
+        "Conscience. A practical judgment applying moral knowledge to an act.",
+        "Prudence. Right reason about things to be done."
+      ]
+    },
+    "checks": [
+      {"type": "nonempty", "path": "label"},
+      {"type": "max_words", "path": "label", "value": 5},
+      {
+        "type": "not_contains_ci",
+        "path": "$",
+        "values": ["bestie", "lol", "😊", "practical moral virtues", "..."]
+      }
+    ],
+    "rubrics": [
+      {"id": "coverage", "criterion": "The label genuinely organizes synderesis, conscience, and prudence rather than fitting only one or two."},
+      {"id": "foundation", "criterion": "It names a conceptual foundation, not a vague associated theme."}
+    ]
+  },
+  {
+    "id": "node-label-repair-probe",
+    "operation": "node_label",
+    "description": "An invalid sentence-shaped label should be repaired to one elementary noun phrase.",
+    "tags": ["repair"],
+    "repair_probe_output": "{\"label\":\"These insights are all about how people make morally good practical decisions\"}",
+    "input": {
+      "insight_descriptions": [
+        "Prudence. Right reason about action.",
+        "Conscience. Practical moral judgment."
+      ]
+    },
+    "checks": [
+      {"type": "generation_calls", "value": 2},
+      {"type": "nonempty", "path": "label"},
+      {"type": "max_words", "path": "label", "value": 5},
+      {
+        "type": "not_contains_ci",
+        "path": "label",
+        "values": ["practical moral judgment"]
+      }
+    ],
+    "rubrics": [
+      {"id": "repair", "criterion": "The repair reduces the sentence to a precise elementary noun phrase without introducing a different subject."}
+    ]
+  },
+  {
+    "id": "tree-extraction-pivotal-distinction",
+    "operation": "tree_extraction",
+    "description": "A central new distinction should produce one grounded Node Concept candidate.",
+    "tags": ["representative", "pivotal"],
+    "input": {
+      "question": "Can conscience make a bad act good?",
+      "response": "Conscience does not create moral truth. It is the person's practical judgment about what ought to be done, and that judgment can be mistaken. A sincere but erroneous conscience may affect culpability without changing the act's moral object."
+    },
+    "checks": [
+      {"type": "equals", "path": "subject_label", "value": "Conscience"},
+      {"type": "max_words", "path": "subject_label", "value": 5},
+      {"type": "not_null", "path": "insight_candidate"},
+      {"type": "max_words", "path": "insight_candidate.label", "value": 5},
+      {
+        "type": "not_contains_ci",
+        "path": "insight_candidate.label",
+        "values": ["judges, does not create", "does not create truth"]
+      },
+      {"type": "exact_substring_of_input", "path": "insight_candidate.evidence_excerpt", "input_path": "response"}
+    ],
+    "rubrics": [
+      {"id": "pivotality", "criterion": "The candidate captures the central distinction between culpability and the act's moral object."},
+      {"id": "grounding", "criterion": "The evidence is exact and the summary introduces nothing absent from the answer."}
+    ]
+  },
+  {
+    "id": "tree-extraction-incidental-example",
+    "operation": "tree_extraction",
+    "description": "A procedural example and polite closure should not become a durable Insight.",
+    "tags": ["adversarial", "conservative-extraction"],
+    "input": {
+      "question": "Can you remind me what to click next?",
+      "response": "Open Settings, choose Appearance, and select the theme you prefer. You're all set."
+    },
+    "checks": [
+      {"type": "is_null", "path": "insight_candidate"},
+      {"type": "equals", "path": "subject_label", "value": ""},
+      {"type": "equals", "path": "subject_summary", "value": ""}
+    ],
+    "rubrics": [
+      {"id": "restraint", "criterion": "The model correctly declines to preserve procedural detail or politeness as a conceptual Node."}
+    ]
+  },
+  {
+    "id": "tree-extraction-repair-probe",
+    "operation": "tree_extraction",
+    "description": "Ungrounded evidence in otherwise usable extraction JSON should be repaired or safely dropped.",
+    "tags": ["repair", "grounding"],
+    "repair_probe_output": "{\"subject\":\"Moral Responsibility\",\"insight_candidate\":{\"label\":\"Voluntary Cause\",\"summary\":\"Responsibility can arise from an earlier choice.\",\"evidence_excerpt\":\"An act can be voluntary in its cause when a person freely established the habit or condition from which it later proceeds.\"}}",
+    "input": {
+      "question": "Can an earlier choice make a later unthinking act voluntary?",
+      "response": "An act can be voluntary in its cause when a person freely established the habit or condition from which it later proceeds."
+    },
+    "checks": [
+      {"type": "generation_calls", "value": 2},
+      {"type": "equals", "path": "subject_label", "value": "Moral Responsibility"},
+      {"type": "max_words", "path": "subject_label", "value": 5}
+    ],
+    "rubrics": [
+      {"id": "grounded-repair", "criterion": "Any retained candidate uses exact answer evidence; otherwise the repair safely returns null."},
+      {"id": "preservation", "criterion": "The valid subject is preserved instead of being stylistically replaced."}
+    ]
+  },
+  {
+    "id": "midpoint-equal-two-source",
+    "operation": "midpoint",
+    "description": "Two equal-weight sources should yield five genuine candidates in their shared semantic region.",
+    "tags": ["representative", "two-source", "vector-centroid"],
+    "input": {
+      "concepts": [
+        {"title": "Justice", "definition": "The stable disposition to render to each what is due."},
+        {"title": "Mercy", "definition": "Compassion responding to another's misery through fitting aid."}
+      ],
+      "weights": [0.5, 0.5]
+    },
+    "checks": [
+      {"type": "count", "path": "candidates", "value": 5},
+      {"type": "all_unique", "path": "candidates.*.title"},
+      {"type": "nonempty", "path": "candidates.*.definition"},
+      {
+        "type": "not_contains_ci",
+        "path": "candidates",
+        "values": [
+          "50/50",
+          "weight",
+          "vector",
+          "candidate",
+        "essence of justice is",
+        "must yield to mercy",
+        "mercy as the final purpose of justice"
+      ]
+      }
+    ],
+    "rubrics": [
+      {"id": "integration", "criterion": "Every candidate expresses a meaningful relation, tension, distinction, or synthesis involving both justice and mercy."},
+      {"id": "diversity", "criterion": "The five candidates are substantively different, not cosmetic rewrites."},
+      {"id": "selection", "criterion": "The MiniLM-selected candidate plausibly occupies the shared semantic region."}
+    ]
+  },
+  {
+    "id": "midpoint-eight-source-weighted",
+    "operation": "midpoint",
+    "description": "The maximum eight-source selection should respect strongly unequal normalized weights without dropping nonzero sources.",
+    "tags": ["adversarial", "eight-source", "weights"],
+    "input": {
+      "concepts": [
+        {"title": "Prudence", "definition": "Right reason about concrete action."},
+        {"title": "Justice", "definition": "Rendering to each what is due."},
+        {"title": "Temperance", "definition": "Ordering desire according to reason."},
+        {"title": "Fortitude", "definition": "Firmness in pursuing the good despite difficulty."},
+        {"title": "Conscience", "definition": "Practical judgment about a particular act."},
+        {"title": "Synderesis", "definition": "Habitual grasp of first moral principles."},
+        {"title": "Law", "definition": "An ordinance of reason for the common good."},
+        {"title": "Common Good", "definition": "A shared good in which members can participate without division."}
+      ],
+      "weights": [40, 20, 10, 10, 8, 5, 4, 3]
+    },
+    "checks": [
+      {"type": "count", "path": "candidates", "value": 5},
+      {"type": "all_unique", "path": "candidates.*.title"},
+      {"type": "nonempty", "path": "candidates.*.definition"}
+    ],
+    "rubrics": [
+      {"id": "weighting", "criterion": "Prudence and justice visibly dominate while every nonzero source contributes meaningfully rather than appearing as a list."},
+      {"id": "coherence", "criterion": "Candidates remain atomic and intelligible despite the eight-source input."},
+      {"id": "diversity", "criterion": "The candidate pool offers genuinely different discoveries around the weighted center."}
+    ]
+  },
+  {
+    "id": "midpoint-repair-probe",
+    "operation": "midpoint",
+    "description": "A four-candidate malformed blend should be repaired once into five grounded, distinct candidates.",
+    "tags": ["repair"],
+    "repair_probe_output": "{\"candidates\":[{\"title\":\"Prudent Courage\",\"definition\":\"Courage directed by practical judgment.\"},{\"title\":\"Measured Boldness\",\"definition\":\"Firm action disciplined by reason.\"},{\"title\":\"Courageous Deliberation\",\"definition\":\"Deliberation that does not retreat from difficulty.\"},{\"title\":\"Resolute Prudence\",\"definition\":\"Practical wisdom firm enough to act.\"}]}",
+    "input": {
+      "concepts": [
+        {"title": "Prudence", "definition": "Right reason about concrete action."},
+        {"title": "Fortitude", "definition": "Firmness in pursuing the good despite difficulty."}
+      ],
+      "weights": [0.65, 0.35]
+    },
+    "checks": [
+      {"type": "generation_calls", "value": 2},
+      {"type": "count", "path": "candidates", "value": 5},
+      {"type": "all_unique", "path": "candidates.*.title"},
+      {"type": "nonempty", "path": "candidates.*.definition"}
+    ],
+    "rubrics": [
+      {"id": "preservation", "criterion": "The repair preserves useful existing candidates and supplies only the missing grounded diversity."},
+      {"id": "non-invention", "criterion": "It introduces no unrelated concepts, citations, or claims."}
+    ]
+  },
+  {
+    "id": "make-node-abstract-concept",
+    "operation": "make_node",
+    "description": "An abstract Node should receive three illuminating, non-template dimensions.",
+    "tags": ["representative", "abstract"],
+    "input": {
+      "concept": {
+        "title": "Analogy of Being",
+        "definition": "Terms said of God and creatures are neither purely univocal nor purely equivocal, but proportionally related."
+      }
+    },
+    "checks": [
+      {"type": "count", "path": "children", "value": 3},
+      {"type": "all_unique", "path": "children.*.title"},
+      {"type": "nonempty", "path": "children.*.definition"},
+      {"type": "not_contains_ci", "path": "children.*.title", "values": ["foundations", "implications", "in practice"]},
+      {
+        "type": "not_contains_ci",
+        "path": "$",
+        "values": [
+          "as stated by the Philosopher",
+          "Metaph. ii",
+          "participation in God's essence",
+          "participate in the divine essence",
+          "univocal in God",
+          "equivocal in creatures",
+          "being in its highest degree"
+        ]
+      }
+    ],
+    "rubrics": [
+      {"id": "dimensions", "criterion": "The children select the three most illuminating dimensions for this concept rather than filling a generic template."},
+      {"id": "non-overlap", "criterion": "Each child is atomic and substantively distinct from the other two."},
+      {"id": "depth", "criterion": "Together they deepen or qualify the parent instead of merely paraphrasing it."}
+    ]
+  },
+  {
+    "id": "make-node-concrete-concept",
+    "operation": "make_node",
+    "description": "A practical concept should receive useful children adapted to its actual structure.",
+    "tags": ["representative", "practical"],
+    "input": {
+      "concept": {
+        "title": "Fraternal Correction",
+        "definition": "A charitable act that seeks another person's moral good by addressing a fault in a fitting manner."
+      }
+    },
+    "checks": [
+      {"type": "count", "path": "children", "value": 3},
+      {"type": "all_unique", "path": "children.*.title"},
+      {"type": "nonempty", "path": "children.*.definition"}
+    ],
+    "rubrics": [
+      {"id": "adaptation", "criterion": "The children address dimensions genuinely important to fraternal correction, such as purpose, fitting conditions, risks, or limits."},
+      {"id": "utility", "criterion": "The set supports further inquiry rather than offering generic moral advice."},
+      {"id": "neutrality", "criterion": "The children use clear neutral editorial language without persona leakage."}
+    ]
+  },
+  {
+    "id": "make-node-repair-probe",
+    "operation": "make_node",
+    "description": "Duplicate Make Node children should be repaired once into exactly three non-overlapping Insights.",
+    "tags": ["repair"],
+    "repair_probe_output": "{\"children\":[{\"title\":\"Conditions\",\"definition\":\"The conditions under which double effect applies.\"},{\"title\":\"Conditions\",\"definition\":\"The requirements for double effect.\"},{\"title\":\"Applications\",\"definition\":\"Cases in which double effect may be used.\"}]}",
+    "input": {
+      "concept": {
+        "title": "Double Effect",
+        "definition": "A principle for assessing actions with both intended good effects and foreseen harmful effects."
+      }
+    },
+    "checks": [
+      {"type": "generation_calls", "value": 2},
+      {"type": "count", "path": "children", "value": 3},
+      {"type": "all_unique", "path": "children.*.title"},
+      {"type": "nonempty", "path": "children.*.definition"},
+      {
+        "type": "not_contains_ci",
+        "path": "children.*.title",
+        "values": [
+          "definition",
+          "conditions",
+          "assessment",
+          "applications",
+          "principle of double effect",
+          "intended good effect",
+          "foreseen harmful effect"
+        ]
+      },
+      {
+        "type": "not_contains_ci",
+        "path": "children.*.definition",
+        "values": ["moral object is the good effect", "good effect intended by the agent"]
+      }
+    ],
+    "rubrics": [
+      {"id": "repair", "criterion": "The repair resolves duplication into accurate, concept-specific dimensions grounded in Double Effect rather than preserving generic malformed buckets."},
+      {"id": "non-overlap", "criterion": "The final three children illuminate distinct dimensions of Double Effect."}
+    ]
+  },
+  {
+    "id": "compaction-consequential-revision",
+    "operation": "compaction",
+    "description": "Compaction must preserve an earlier claim, the corrected position, and the decisive reason.",
+    "tags": ["representative", "revision", "epistemic-status"],
+    "input": {
+      "compacted_context": "The assistant proposed that every voluntary act requires a fresh explicit choice. The user had not accepted this.",
+      "recent_messages": [
+        {"role": "user", "text": "A deliberately acquired habit can make a later act voluntary in its cause without a fresh explicit choice."},
+        {"role": "assistant", "text": "That counterexample defeats my earlier universal claim. The revised position is that some voluntary acts are explicit choices now, while others remain voluntary through an earlier choice that caused the habit."},
+        {"role": "user", "text": "Keep open whether ignorance could interrupt that responsibility."}
+      ]
+    },
+    "checks": [
+      {"type": "nonempty", "path": "summary"},
+      {"type": "min_words", "path": "summary", "value": 35},
+      {"type": "not_contains_ci", "path": "summary", "values": ["bestie", "lol", "😊"]}
+    ],
+    "rubrics": [
+      {"id": "revision", "criterion": "The checkpoint records the earlier claim, revised position, and decisive habit-based counterexample."},
+      {"id": "open-question", "criterion": "It preserves the unresolved question about ignorance rather than treating it as settled."},
+      {"id": "attribution", "criterion": "It accurately distinguishes the assistant's proposal, the user's objection, and what was accepted."}
+    ]
+  },
+  {
+    "id": "compaction-preference-and-disagreement",
+    "operation": "compaction",
+    "description": "Compaction should retain durable user preferences and unresolved substantive disagreement without turning either into fact.",
+    "tags": ["adversarial", "preference", "attribution"],
+    "input": {
+      "recent_messages": [
+        {"role": "user", "text": "Please keep future answers concise and distinguish empirical claims from philosophical premises."},
+        {"role": "assistant", "text": "I proposed that political authority necessarily requires a single ruler."},
+        {"role": "user", "text": "I do not accept that. We agree authority serves the common good, but the best constitutional form remains disputed."}
+      ]
+    },
+    "checks": [
+      {"type": "nonempty", "path": "summary"},
+      {"type": "min_words", "path": "summary", "value": 25}
+    ],
+    "rubrics": [
+      {"id": "preference", "criterion": "The checkpoint preserves the user's concise-answer and epistemic-labeling preferences."},
+      {"id": "disagreement", "criterion": "It records common ground and continuing disagreement without converting the assistant's proposal into an established conclusion."}
+    ]
+  },
+  {
+    "id": "compaction-repair-probe",
+    "operation": "compaction",
+    "description": "Malformed checkpoint output should be repaired once without erasing attribution or unresolved status.",
+    "tags": ["repair"],
+    "repair_probe_output": "summary: User requested concise replies. Assistant suggested the disputed premise. User rejected it. The issue remains unresolved.",
+    "input": {
+      "compacted_context": "The inquiry concerns whether law always creates moral obligation.",
+      "recent_messages": [
+        {"role": "assistant", "text": "I suggested that every enacted law binds morally."},
+        {"role": "user", "text": "I rejected that because an unjust enactment may lack the character of law. We have not settled the boundary cases."}
+      ]
+    },
+    "checks": [
+      {"type": "generation_calls", "value": 2},
+      {"type": "nonempty", "path": "summary"},
+      {"type": "min_words", "path": "summary", "value": 20}
+    ],
+    "rubrics": [
+      {"id": "minimal-repair", "criterion": "The repair changes the malformed contract while preserving attribution and unresolved status."},
+      {"id": "grounding", "criterion": "It introduces no conclusions or evidence beyond the supplied checkpoint and turns."}
+    ]
+  }
+]

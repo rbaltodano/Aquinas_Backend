@@ -8,7 +8,10 @@ import numpy as np
 
 from insight_tree import InsightTreeEngine, TreeInsight
 from relatedness import MiniLMRelatednessProvider
-from structured_generation import GeneratedTreeNodeSeed, GeneratedTreeUpdate
+from structured_generation import (
+    GeneratedTreeInsightCandidate,
+    GeneratedTreeUpdate,
+)
 from tree_store import DynamicDefinitionRecord, InsightTreeStore, PersistentInsightTreeService
 
 
@@ -104,7 +107,7 @@ class PersistentInsightTreeTests(unittest.TestCase):
         extraction = GeneratedTreeUpdate(
             subject_label="Natural Law",
             subject_summary="Reason's participation in eternal law.",
-            node_seed=GeneratedTreeNodeSeed(
+            insight_candidate=GeneratedTreeInsightCandidate(
                 label="Participation in Eternal Law",
                 summary="Natural law participates rationally in eternal law.",
                 evidence_excerpt="participation in eternal law",
@@ -128,16 +131,20 @@ class PersistentInsightTreeTests(unittest.TestCase):
         self.assertEqual(first, second)
         self.assertEqual(first["status"], "updated")
         self.assertEqual(len(snapshot["nodes"]), 1)
-        self.assertEqual(snapshot["nodes"][0]["label"], "Participation in Eternal Law")
-        self.assertEqual(snapshot["nodes"][0]["insights"], [])
-        self.assertEqual(first["added_insight_ids"], [])
+        self.assertEqual(snapshot["nodes"][0]["label"], "Natural Law")
+        self.assertEqual(len(snapshot["nodes"][0]["insights"]), 1)
+        self.assertEqual(
+            snapshot["nodes"][0]["insights"][0]["title"],
+            "Participation in Eternal Law",
+        )
+        self.assertEqual(len(first["added_insight_ids"]), 1)
         self.assertEqual(len(first["added_node_ids"]), 1)
 
-    def test_generated_seed_is_never_persisted_as_an_insight(self) -> None:
+    def test_generated_candidate_is_persisted_as_an_insight(self) -> None:
         extraction = GeneratedTreeUpdate(
             subject_label="Grace",
             subject_summary="Grace perfects nature.",
-            node_seed=GeneratedTreeNodeSeed(
+            insight_candidate=GeneratedTreeInsightCandidate(
                 label="Grace Perfects Nature",
                 summary="Grace elevates rather than destroys nature.",
                 evidence_excerpt="Grace perfects nature",
@@ -151,11 +158,16 @@ class PersistentInsightTreeTests(unittest.TestCase):
         )
 
         nodes = self.store.snapshot("conversation-1")["nodes"]
-        self.assertEqual(result["added_insight_ids"], [])
+        self.assertEqual(len(result["added_insight_ids"]), 1)
         self.assertEqual(len(result["added_node_ids"]), 1)
         self.assertEqual(len(nodes), 1)
-        self.assertEqual(nodes[0]["label"], "Grace Perfects Nature")
-        self.assertEqual(nodes[0]["insights"], [])
+        self.assertEqual(nodes[0]["label"], "Grace")
+        self.assertEqual(len(nodes[0]["insights"]), 1)
+        self.assertEqual(nodes[0]["insights"][0]["title"], "Grace Perfects Nature")
+        self.assertEqual(
+            nodes[0]["insights"][0]["source_type"],
+            "automatic_response",
+        )
 
     def test_empty_extraction_is_no_change(self) -> None:
         result = self.service.apply_response_update(
@@ -211,7 +223,7 @@ class PersistentInsightTreeTests(unittest.TestCase):
         provider = InjectedScoreProvider()
         service = PersistentInsightTreeService(
             store=self.store,
-            engine=self.engine,
+            engine=InsightTreeEngine(provider),
             provider=provider,
         )
 
@@ -228,7 +240,7 @@ class PersistentInsightTreeTests(unittest.TestCase):
                 GeneratedTreeUpdate(
                     title,
                     f"A summary of {title}.",
-                    GeneratedTreeNodeSeed(
+                    GeneratedTreeInsightCandidate(
                         label=title,
                         summary=f"The durable meaning of {title}.",
                         evidence_excerpt=title,
@@ -371,7 +383,7 @@ class PersistentInsightTreeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "already exists"):
             self.service.assign_and_save("conversation-1", insight)
 
-    def test_manual_save_attaches_to_generated_node_seed(self) -> None:
+    def test_manual_save_attaches_to_generated_insight_node(self) -> None:
         provider = InjectedScoreProvider()
         service = PersistentInsightTreeService(
             store=self.store,
@@ -385,7 +397,7 @@ class PersistentInsightTreeTests(unittest.TestCase):
             GeneratedTreeUpdate(
                 subject_label="First Principles",
                 subject_summary="The foundation of the inquiry.",
-                node_seed=GeneratedTreeNodeSeed(
+                insight_candidate=GeneratedTreeInsightCandidate(
                     label="First Principle",
                     summary="An automatic contextual definition.",
                     evidence_excerpt="first principle",
@@ -409,6 +421,76 @@ class PersistentInsightTreeTests(unittest.TestCase):
         self.assertEqual(stored[0]["id"], "saved-first-principle")
         self.assertEqual(stored[0]["title"], "First Principle")
         self.assertEqual(stored[0]["source_type"], "saved_definition")
+
+    def test_promoting_same_name_automatic_insight_requests_node_rename(self) -> None:
+        self.service.apply_response_update(
+            "conversation-1",
+            "response-1",
+            "branch-1",
+            GeneratedTreeUpdate(
+                subject_label="Predestination",
+                subject_summary="Divine governance of creaturely ends.",
+                insight_candidate=GeneratedTreeInsightCandidate(
+                    label="Predestination",
+                    summary="God orders creatures toward their final end.",
+                    evidence_excerpt="predestination",
+                ),
+            ),
+        )
+
+        self.service.assign_and_save(
+            "conversation-1",
+            TreeInsight(
+                id="saved-predestination",
+                title="Predestination",
+                definition="God's ordering of creatures toward their final end.",
+            ),
+        )
+
+        snapshot = self.store.snapshot("conversation-1")
+        self.assertTrue(snapshot["nodes"][0]["needs_generated_label"])
+
+        # Older databases may have cleared this flag while retaining the collision.
+        node_id = snapshot["nodes"][0]["id"]
+        self.store.set_node_label("conversation-1", node_id, "Predestination")
+        reconciled = self.store.snapshot("conversation-1")
+        self.assertTrue(reconciled["nodes"][0]["needs_generated_label"])
+
+    def test_snapshot_prefers_definition_generated_in_that_conversation(self) -> None:
+        self.store.save_dynamic_definition(
+            conversation_id="conversation-1",
+            term_key="predestination",
+            source_hash="source-1",
+            requested_term="Predestination",
+            source_excerpt="The current conversation's use.",
+            definition=DynamicDefinitionRecord(
+                title="Predestination",
+                part_of_speech="noun",
+                pronunciation="",
+                definition="God decrees salvation and permits damnation.",
+                example="",
+                context="In the current conversation",
+            ),
+        )
+        self.service.assign_and_save(
+            "conversation-1",
+            TreeInsight(
+                id="saved-predestination",
+                title="Predestination",
+                definition=(
+                    "In another conversation: God predetermines every event.\n"
+                    "In the current conversation: God decrees salvation and permits damnation."
+                ),
+            ),
+            suggested_node_label="Divine Providence",
+        )
+
+        snapshot = self.store.snapshot("conversation-1")
+
+        self.assertEqual(
+            snapshot["nodes"][0]["insights"][0]["definition"],
+            "In the current conversation: God decrees salvation and permits damnation.",
+        )
 
     def test_removing_an_insight_repairs_or_removes_its_node(self) -> None:
         first = TreeInsight(
@@ -456,6 +538,7 @@ class PersistentInsightTreeTests(unittest.TestCase):
             pronunciation="uh-NAL-uh-jee",
             definition="A way of naming different things according to ordered likeness.",
             example="Being is said analogically of God and creatures.",
+            context="Names applied across different subjects",
         )
         self.store.save_dynamic_definition(
             conversation_id="conversation-1",

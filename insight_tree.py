@@ -111,22 +111,33 @@ class InsightTreeEngine:
                     [member.id for member in owner.insights] + [insight.id]
                 ),
                 evaluated_nodes=tuple(evaluated),
-                needs_generated_label=False,
+                needs_generated_label=self._labels_match(owner.label, insight.title),
                 insight_embedding=insight_embedding,
             )
 
         generated_label = (suggested_node_label or "").strip()
+        node_label = generated_label or insight.title.strip()
         return AssignmentDecision(
             action="created",
             node_id=str(uuid4()),
-            node_label=generated_label or insight.title.strip(),
+            node_label=node_label,
             relatedness=1.0,
             distance=0.0,
             member_insight_ids=(insight.id,),
             evaluated_nodes=tuple(evaluated),
-            needs_generated_label=not bool(generated_label),
+            needs_generated_label=(
+                not bool(generated_label)
+                or self._labels_match(node_label, insight.title)
+            ),
             insight_embedding=insight_embedding,
         )
+
+    @staticmethod
+    def _labels_match(left: str, right: str) -> bool:
+        def canonical(value: str) -> str:
+            return " ".join(value.casefold().strip(" .,:;!?").split())
+
+        return canonical(left) == canonical(right)
 
     def _embedding_for(self, insight: TreeInsight) -> Embedding:
         if insight.embedding is not None:

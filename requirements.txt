@@ -1,5 +1,6 @@
 chromadb
 fastapi
-mlx-lm
+mlx-lm>=0.31.3,<0.32
+mlx-vlm>=0.6.3,<0.7
 sentence-transformers>=5.6,<6
 uvicorn[standard]

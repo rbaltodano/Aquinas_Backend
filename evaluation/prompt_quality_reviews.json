@@ -1,0 +1,141 @@
+{
+  "reviewed_at": "2026-07-30",
+  "reviewer": "Codex qualitative audit with operation-specific rubric review",
+  "reviews": {
+    "conversation-simple-proportionate": {
+      "scores": {"accuracy": 5, "proportion": 4, "summary": 4},
+      "critical_failure": false,
+      "overall_notes": "Accurate, direct, and proportionate to the simple question."
+    },
+    "conversation-direct-definition": {
+      "scores": {"definition": 5, "alignment": 5, "neutrality": 5},
+      "critical_failure": false,
+      "overall_notes": "Defines the requested term in context without persona leakage."
+    },
+    "conversation-revises-conclusion": {
+      "scores": {"revision": 5, "scope": 5, "distinction": 5, "category-accuracy": 5},
+      "critical_failure": false,
+      "overall_notes": "Explicitly revises the conclusion while preserving the relevant distinction."
+    },
+    "conversation-inquire-connection-explain-and-do": {
+      "scores": {"explanation": 4, "type-accuracy": 4, "analysis": 4, "non-forced": 4},
+      "critical_failure": false,
+      "overall_notes": "Explains the action and performs a type-aware, non-forced comparison."
+    },
+    "conversation-foundational-and-discovery-highlights": {
+      "scores": {"accuracy": 4, "scope": 5, "foundations": 4, "discovery": 4, "restraint": 3},
+      "critical_failure": false,
+      "overall_notes": "Prioritizes foundational concepts while retaining useful discovery terms."
+    },
+    "conversation-repair-probe": {
+      "scores": {"preservation": 5, "non-invention": 5},
+      "critical_failure": false,
+      "overall_notes": "Repair preserves grounded content without adding claims."
+    },
+    "definition-participation-metaphysics": {
+      "scores": {"contextuality": 4, "neutrality": 5},
+      "critical_failure": false,
+      "overall_notes": "Captures the metaphysical relation in neutral, contextual language."
+    },
+    "definition-participation-civic": {
+      "scores": {"distinct-meaning": 5, "source-fit": 5},
+      "critical_failure": false,
+      "overall_notes": "Correctly distinguishes the civic sense from the metaphysical sense."
+    },
+    "definition-repair-probe": {
+      "scores": {"minimal-repair": 5, "non-invention": 5},
+      "critical_failure": false,
+      "overall_notes": "Makes only the structural repair and remains grounded."
+    },
+    "qotd-unresolved-distinction": {
+      "scores": {"grounding": 5, "openness": 4, "standalone": 5},
+      "critical_failure": false,
+      "overall_notes": "Grounded in the unresolved distinction and useful as a standalone question."
+    },
+    "qotd-no-forced-insight-citation": {
+      "scores": {"relevance": 4, "restraint": 5},
+      "critical_failure": false,
+      "overall_notes": "Relevant without forcing an insight citation."
+    },
+    "qotd-repair-probe": {
+      "scores": {"minimal-repair": 5, "citation": 5},
+      "critical_failure": false,
+      "overall_notes": "Repairs format while preserving the supported citation."
+    },
+    "node-label-single-insight": {
+      "scores": {"elementary": 4, "economy": 5},
+      "critical_failure": false,
+      "overall_notes": "A compact label at the appropriate conceptual level."
+    },
+    "node-label-cohesive-cluster": {
+      "scores": {"coverage": 4, "foundation": 4},
+      "critical_failure": false,
+      "overall_notes": "Covers the cluster with a foundational rather than decorative label."
+    },
+    "node-label-repair-probe": {
+      "scores": {"repair": 5},
+      "critical_failure": false,
+      "overall_notes": "Produces a valid economical label from malformed output."
+    },
+    "tree-extraction-pivotal-distinction": {
+      "scores": {"pivotality": 5, "grounding": 5},
+      "critical_failure": false,
+      "overall_notes": "Captures the pivotal culpability-versus-object distinction with exact support."
+    },
+    "tree-extraction-incidental-example": {
+      "scores": {"restraint": 5},
+      "critical_failure": false,
+      "overall_notes": "Correctly declines to elevate a procedural aside."
+    },
+    "tree-extraction-repair-probe": {
+      "scores": {"grounded-repair": 5, "preservation": 5},
+      "critical_failure": false,
+      "overall_notes": "Repairs the contract while preserving the grounded subject."
+    },
+    "midpoint-equal-two-source": {
+      "scores": {"integration": 4, "diversity": 4, "selection": 4},
+      "critical_failure": false,
+      "overall_notes": "Every candidate occupies the shared justice-mercy region; vector selection remains downstream and mathematical."
+    },
+    "midpoint-eight-source-weighted": {
+      "scores": {"weighting": 3, "coherence": 3, "diversity": 4},
+      "critical_failure": false,
+      "overall_notes": "Dominant concepts organize the center, subordinate sources contribute, and the five angles remain distinguishable."
+    },
+    "midpoint-repair-probe": {
+      "scores": {"preservation": 5, "non-invention": 4},
+      "critical_failure": false,
+      "overall_notes": "Preserves valid candidates and fills the missing grounded alternative."
+    },
+    "make-node-abstract-concept": {
+      "scores": {"dimensions": 4, "non-overlap": 4, "depth": 4},
+      "critical_failure": false,
+      "overall_notes": "Three distinct, conceptually useful dimensions rather than synonyms."
+    },
+    "make-node-concrete-concept": {
+      "scores": {"adaptation": 4, "utility": 4, "neutrality": 5},
+      "critical_failure": false,
+      "overall_notes": "Adapts the child structure to a concrete concept in neutral language."
+    },
+    "make-node-repair-probe": {
+      "scores": {"repair": 5, "non-overlap": 5},
+      "critical_failure": false,
+      "overall_notes": "Repairs into the three authoritative, non-overlapping dimensions."
+    },
+    "compaction-consequential-revision": {
+      "scores": {"revision": 5, "open-question": 5, "attribution": 5},
+      "critical_failure": false,
+      "overall_notes": "Preserves the conclusion change, unresolved question, and speaker attribution."
+    },
+    "compaction-preference-and-disagreement": {
+      "scores": {"preference": 5, "disagreement": 5},
+      "critical_failure": false,
+      "overall_notes": "Retains both the durable preference and live disagreement."
+    },
+    "compaction-repair-probe": {
+      "scores": {"minimal-repair": 5, "grounding": 5},
+      "critical_failure": false,
+      "overall_notes": "Minimal, grounded repair with no invented state."
+    }
+  }
+}

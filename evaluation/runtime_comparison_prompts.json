@@ -1,0 +1,17 @@
+[
+  {
+    "id": "definition-prudence",
+    "category": "simple",
+    "question": "What is prudence?"
+  },
+  {
+    "id": "moral-act-motive",
+    "category": "dialectic",
+    "question": "Can an otherwise good deed be morally tainted by an evil motive?"
+  },
+  {
+    "id": "mercy-justice",
+    "category": "dialectic",
+    "question": "Think carefully about whether mercy can conflict with justice."
+  }
+]

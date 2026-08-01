@@ -93,6 +93,49 @@ class InsightTreeEngineTests(unittest.TestCase):
         self.assertEqual(result.action, "created")
         self.assertNotEqual(result.node_id, node.id)
 
+    def test_same_name_node_is_marked_for_generated_label(self) -> None:
+        insight = TreeInsight(
+            id="insight-predestination",
+            title="Predestination",
+            definition="God's ordering of creatures toward their final end.",
+        )
+
+        result = self.engine.assign_new_insight(
+            insight,
+            [],
+            suggested_node_label="Predestination",
+        )
+
+        self.assertEqual(result.node_label, "Predestination")
+        self.assertTrue(result.needs_generated_label)
+
+    def test_attaching_same_name_insight_marks_node_for_generated_label(self) -> None:
+        node = TreeNode(
+            id="node-predestination",
+            label="Predestination",
+            insights=(
+                TreeInsight(
+                    id="existing-election",
+                    title="Election",
+                    definition="God's choice ordered toward salvation.",
+                ),
+            ),
+        )
+        insight = TreeInsight(
+            id="insight-predestination",
+            title="Predestination",
+            definition="God's ordering of creatures toward their final end.",
+        )
+
+        result = self.engine.assign_new_insight(
+            insight,
+            [node],
+            membership_threshold=0,
+        )
+
+        self.assertEqual(result.action, "attached")
+        self.assertTrue(result.needs_generated_label)
+
     def test_rejects_duplicate_insight_membership(self) -> None:
         duplicate = TreeInsight(
             id="duplicate",

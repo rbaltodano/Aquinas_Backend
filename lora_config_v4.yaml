@@ -1,4 +1,4 @@
-model: "mlx-community/gemma-4-e4b-4bit"
+model: "google/gemma-4-E2B-it"
 train: true
 data: "theology_corpus"
 iters: 5000 
@@ -6,7 +6,7 @@ learning_rate: 2e-4 # Slightly higher to push through all layers
 batch_size: 1
 grad_checkpoint: true
 max_seq_length: 2048
-adapter_path: "theology_corpus/aquinas_e4b_v4"
+adapter_path: "models/aquinas_adapters"
 lora_parameters:
   keys: ["self_attn.q_proj", "self_attn.v_proj", "mlp.gate_proj", "mlp.up_proj", "mlp.down_proj"]
   rank: 32 # More stable for all-layer training

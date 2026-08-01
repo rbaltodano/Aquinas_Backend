@@ -1,60 +1,160 @@
 import re
 import time
-from threading import Lock
 
 from collections.abc import Iterator
+from io import BytesIO
+from typing import Sequence
 
-from mlx_lm import generate, load, stream_generate
+from mlx_vlm import apply_chat_template, generate, load, stream_generate
+from PIL import Image
 
-model_path = "models/Aquinas-Final"
-
-print(f"--- ⏳ 1. Loading 9GB Model... ---")
-start_time = time.time()
-model, tokenizer = load(model_path)
-print(f"--- ✅ Loaded in {time.time() - start_time:.1f}s ---")
-
-SYSTEM_INSTRUCTION = (
-    "You are Aquinas, a Thomistic Logic Engine. "
-    "CORE PERSONA: You are a warm, seasoned mentor. Your tone is hospitable, patient, and direct. "
-    "Speak as if we are sharing a quiet conversation. "
-    "GUIDELINES:\n"
-    "1. For simple talk: Be brief and natural. No formal structures needed. "
-    "2. For deep inquiries: Acknowledge the weight of the question with a brief, thoughtful "
-    "reflection (2-3 sentences) that shows you are listening, then transition into the "
-    "Scholastic Dialectic. "
-    "3. When using the Dialectic (Objections, I answer that): Use it to illuminate the truth, "
-    "but keep your 'Replies' grounded and clear. "
-    "Maintain Level 7 brevity. Be profound, but get to the heart of the matter quickly. "
-    "Do not think out loud.\n\n"
+from generation_coordinator import (
+    GenerationCoordinator,
+    GenerationPreempted,
+)
+from model_identity import (
+    MODEL_ADAPTER_PATH,
+    MODEL_DISPLAY_NAME,
+    MODEL_RUNTIME_PATH,
 )
 
-_generation_lock = Lock()
+print(
+    f"--- ⏳ 1. Loading Aquinas ({MODEL_DISPLAY_NAME}) from "
+    f"{MODEL_RUNTIME_PATH} with {MODEL_ADAPTER_PATH}... ---"
+)
+start_time = time.time()
+model, processor = load(
+    MODEL_RUNTIME_PATH,
+    adapter_path=MODEL_ADAPTER_PATH,
+)
+tokenizer = getattr(processor, "tokenizer", processor)
+print(f"--- ✅ {MODEL_DISPLAY_NAME} loaded in {time.time() - start_time:.1f}s ---")
+
+LEGACY_TOKENIZER_IDENTITY_MARKERS = (
+    "Thomistic Logic Engine",
+    "DO NOT PLAN",
+    "Assistant: Objection 1:",
+)
 
 
-def generate_aquinas(instruction: str, max_tokens: int = 1_200) -> str:
-    """Run one serialized model generation for chat or a structured task."""
+def _assert_no_legacy_tokenizer_identity(loaded_tokenizer) -> None:
+    init_kwargs = getattr(loaded_tokenizer, "init_kwargs", {}) or {}
+    configured_system_prompt = init_kwargs.get("system_prompt", "")
+    configured_chat_template = getattr(loaded_tokenizer, "chat_template", "") or ""
+    hidden_configuration = f"{configured_system_prompt}\n{configured_chat_template}"
+    if any(
+        marker in hidden_configuration
+        for marker in LEGACY_TOKENIZER_IDENTITY_MARKERS
+    ):
+        raise RuntimeError(
+            "The tokenizer contains a legacy identity override. "
+            "Aquinas identity must be supplied by the runtime system instruction."
+        )
+
+
+_assert_no_legacy_tokenizer_identity(tokenizer)
+
+REASONING_CONSTITUTION = (
+    "Follow reasoning wherever it leads. Treat your previous claims as revisable positions, not "
+    "commitments to defend. Evaluate the strongest reasonable version of the user's argument and "
+    "judge both your reasoning and the user's by the same intellectual standard. Distinguish a "
+    "contradiction or invalid inference from a disputed premise, missing empirical evidence, or "
+    "difference in definitions. When the user supplies reasoning that defeats a premise, exposes "
+    "a contradiction, introduces decisive evidence, or supports a better distinction, explicitly "
+    "revise the affected conclusion and explain what changed. State the earlier claim that failed, "
+    "replace it with the narrowest corrected claim the argument supports, and identify the decisive "
+    "reason. Begin with a direct acknowledgment when the user's objection succeeds; do not call a "
+    "real contradiction merely apparent or present the correction as a defense of the old wording. "
+    "Keep the correction concise. Revise only as far as the argument warrants, while carrying the "
+    "revision through any conclusions that depend on it. Do not introduce auxiliary theories, "
+    "causal claims, or technical machinery that the correction does not require. Preserve category "
+    "distinctions instead of saving a conclusion by relabeling an act, faculty, cause, end, habit, "
+    "or disposition. A canonical example: the counterexample that an act flowing from a deliberately "
+    "acquired habit can be voluntary in its cause without a fresh explicit choice defeats the "
+    "universal claim that every voluntary act must be explicitly chosen when it occurs. The proper "
+    "revision distinguishes an act voluntary in itself through present choice from one voluntary in "
+    "its cause through a relevant prior voluntary act; it must not conclude that the defeated "
+    "universal premise still holds by redefining the second act as non-voluntary. For a successful "
+    "correction, prefer one to three compact paragraphs. Do not "
+    "revise merely because the user disagrees, insists, or sounds confident, and never defend an "
+    "earlier answer merely for consistency or authority. Keep confidence proportionate to the "
+    "available reasons and evidence. "
+)
+
+APPLICATION_TASK_INSTRUCTION = (
+    "You are Aquinas. "
+    "Never reveal private reasoning or hidden scratch work. "
+    "When an action-specific task is provided, follow its instructions and output format exactly; "
+    "the task takes priority over conversational structure. Use neutral, clear editorial language "
+    "for structured application tasks such as definitions, Insight and Node generation, labeling, "
+    "question generation, compaction, extraction, and repair unless the task explicitly requests "
+    "the conversational persona. Never invent a citation, quotation, source location, or "
+    "attribution in any application task."
+)
+
+SYSTEM_INSTRUCTION = (
+    REASONING_CONSTITUTION
+    + APPLICATION_TASK_INSTRUCTION
+)
+
+generation_coordinator = GenerationCoordinator()
+
+
+def _prompt_for(
+    instruction: str,
+    response_prefix: str = "",
+    image_count: int = 0,
+) -> str:
     messages = [
         {
+            "role": "system",
+            "content": SYSTEM_INSTRUCTION,
+        },
+        {
             "role": "user",
-            "content": SYSTEM_INSTRUCTION + instruction,
-        }
+            "content": instruction,
+        },
     ]
-    prompt = tokenizer.apply_chat_template(
+    return apply_chat_template(
+        processor,
+        model.config,
         messages,
-        tokenize=False,
-        add_generation_prompt=True
-    )
+        add_generation_prompt=True,
+        num_images=image_count,
+    ) + response_prefix
+
+
+def _image_inputs(images: Sequence[bytes]) -> list[Image.Image] | None:
+    return [
+        Image.open(BytesIO(image)).convert("RGB")
+        for image in images
+    ] or None
+
+
+def generate_aquinas(
+    instruction: str,
+    max_tokens: int = 1_200,
+    *,
+    images: Sequence[bytes] = (),
+) -> str:
+    """Run one serialized model generation for chat or a structured task."""
+    prompt = _prompt_for(instruction, image_count=len(images))
 
     print(f"--- 🧠 2. Deep Thinking (Letting the engine do its math)... ---")
 
-    with _generation_lock:
+    with generation_coordinator.session("foreground") as lease:
+        print(
+            f'{{"event":"generation_start","priority":"foreground",'
+            f'"queue_wait_seconds":{lease.queue_wait_seconds:.3f}}}'
+        )
         response = generate(
             model,
-            tokenizer,
+            processor,
             prompt=prompt,
+            image=_image_inputs(images),
             max_tokens=max_tokens,
             verbose=False
-        )
+        ).text
 
     # Remove a hidden thought channel if this model emits one.
     clean_response = re.sub(
@@ -66,9 +166,44 @@ def generate_aquinas(instruction: str, max_tokens: int = 1_200) -> str:
     return clean_response.strip()
 
 
+def generate_aquinas_fast(
+    instruction: str,
+    max_tokens: int = 1_200,
+    *,
+    images: Sequence[bytes] = (),
+) -> str:
+    """Generate structured JSON directly without opening a hidden-thought channel."""
+    response_prefix = "{"
+    prompt = _prompt_for(
+        instruction,
+        response_prefix=response_prefix,
+        image_count=len(images),
+    )
+    started_at = time.perf_counter()
+    with generation_coordinator.session("foreground") as lease:
+        response = generate(
+            model,
+            processor,
+            prompt=prompt,
+            image=_image_inputs(images),
+            max_tokens=max_tokens,
+            verbose=False,
+        ).text
+    print(
+        f'{{"event":"generation_complete","mode":"fast",'
+        f'"queue_wait_seconds":{lease.queue_wait_seconds:.3f},'
+        f'"generation_seconds":{time.perf_counter() - started_at:.3f}}}'
+    )
+    return response_prefix + response
+
+
 def generate_aquinas_stream(
     instruction: str,
     max_tokens: int = 1_200,
+    *,
+    response_prefix: str = "",
+    priority: str = "foreground",
+    images: Sequence[bytes] = (),
 ) -> Iterator[str]:
     """Yield decoded model text as MLX produces it.
 
@@ -76,29 +211,73 @@ def generate_aquinas_stream(
     structured output. In particular, this generator must not be sent directly
     to a client because a checkpoint may emit private scratch-work channels.
     """
-    messages = [
-        {
-            "role": "user",
-            "content": SYSTEM_INSTRUCTION + instruction,
-        }
-    ]
-    prompt = tokenizer.apply_chat_template(
-        messages,
-        tokenize=False,
-        add_generation_prompt=True,
+    prompt = _prompt_for(
+        instruction,
+        response_prefix=response_prefix,
+        image_count=len(images),
     )
 
     print("--- 🧠 2. Streaming generation... ---")
 
-    with _generation_lock:
+    started_at = time.perf_counter()
+    first_fragment_at: float | None = None
+    generated_tokens = 0
+    with generation_coordinator.session(priority) as lease:
         for response in stream_generate(
             model,
-            tokenizer,
+            processor,
             prompt=prompt,
+            image=_image_inputs(images),
             max_tokens=max_tokens,
         ):
+            if lease.cancel_event.is_set():
+                raise GenerationPreempted(
+                    "Background generation was preempted by foreground work."
+                )
+            generated_tokens = response.generation_tokens
             if response.text:
+                if first_fragment_at is None:
+                    first_fragment_at = time.perf_counter()
                 yield response.text
+    completed_at = time.perf_counter()
+    print(
+        f'{{"event":"generation_complete","mode":"stream",'
+        f'"priority":"{priority}","queue_wait_seconds":'
+        f'{lease.queue_wait_seconds:.3f},"ttft_seconds":'
+        f'{(first_fragment_at - started_at) if first_fragment_at else 0:.3f},'
+        f'"generation_seconds":{completed_at - started_at:.3f},'
+        f'"generated_tokens":{generated_tokens}}}'
+    )
+
+
+def generate_aquinas_background(
+    instruction: str,
+    max_tokens: int = 1_200,
+) -> str:
+    """Run a preemptible background structured generation."""
+    return "".join(
+        generate_aquinas_stream(
+            instruction,
+            max_tokens=max_tokens,
+            priority="background",
+        )
+    )
+
+
+def generate_aquinas_background_fast(
+    instruction: str,
+    max_tokens: int = 1_200,
+) -> str:
+    """Run preemptible background generation on the direct-JSON path."""
+    response_prefix = "{"
+    return response_prefix + "".join(
+        generate_aquinas_stream(
+            instruction,
+            max_tokens=max_tokens,
+            response_prefix=response_prefix,
+            priority="background",
+        )
+    )
 
 
 def ask_aquinas(query: str) -> str:
