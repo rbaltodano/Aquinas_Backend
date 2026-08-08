@@ -2,6 +2,8 @@ __pycache__/
 *.py[cod]
 aquinas_env/
 litert_conversion_env/
+coreml_conversion_env/
+gguf_conversion_env/
 aquinas_memory/
 models/
 evaluation/results/

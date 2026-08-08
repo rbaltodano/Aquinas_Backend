@@ -4,13 +4,25 @@ import binascii
 import hashlib
 from io import BytesIO
 import json
+import logging
+import os
+import secrets
 import time
+from collections import defaultdict, deque
+from threading import Lock
+from typing import Sequence
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel, Field, field_validator
+
+logging.basicConfig(
+    level=os.environ.get("AQUINAS_LOG_LEVEL", "INFO"),
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
+logger = logging.getLogger("aquinas.server")
 
 from insight_tree import (
     DEFAULT_MEMBERSHIP_THRESHOLD,
@@ -19,6 +31,7 @@ from insight_tree import (
     insight_tree_engine,
 )
 from main import (
+    MODEL_DISPLAY_NAME,
     GenerationPreempted,
     ask_aquinas,
     generate_aquinas,
@@ -27,33 +40,70 @@ from main import (
     generate_aquinas_fast,
     generate_aquinas_stream,
 )
+from grounding_retrieval import grounding_retriever
 from relatedness import relatedness_provider
 from structured_generation import (
     AquinasGenerationService,
     ConversationGenerationMode,
     ConversationImage,
+    ConversationInsightQuote,
     ConversationMessage,
     ConversationPersonality,
     ConversationStreamParser,
     ContextualDefinition,
     DailyQuestionInsight,
     GeneratedDailyQuestion,
+    GeneratedQuoteNotability,
     StructuredGenerationError,
+    is_heuristically_notable,
     requested_definition_term,
     resolve_conversation_generation_mode,
 )
+from today_in_history import entry_for_date
 from tree_store import DynamicDefinitionRecord, persistent_tree_service, tree_store
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     relatedness_provider.load()
+    grounding_retriever.load()
     tree_store.initialize()
     tree_store.reconcile_saved_automatic_aliases(relatedness_provider)
     yield
 
 
-app = FastAPI(title="Aquinas Logic API", lifespan=lifespan)
+def _latest_user_message_text(
+    messages: Sequence[ConversationMessage],
+) -> str:
+    for message in reversed(messages):
+        if message.role == "user":
+            return message.text
+    return ""
+
+
+API_KEY_ENV_VAR = "AQUINAS_API_KEY"
+
+
+async def require_api_key(
+    x_api_key: str | None = Header(default=None, alias="X-Aquinas-Api-Key"),
+) -> None:
+    """A no-op until AQUINAS_API_KEY is set in the environment, so local
+    development is unaffected by default -- this server binds 0.0.0.0, so
+    it's reachable by anything on the LAN, not just loopback. Set the env
+    var before exposing this beyond a trusted network, and have the client
+    send a matching X-Aquinas-Api-Key header."""
+    expected = os.environ.get(API_KEY_ENV_VAR)
+    if expected is None:
+        return
+    if x_api_key is None or not secrets.compare_digest(x_api_key, expected):
+        raise HTTPException(status_code=401, detail="Missing or invalid API key.")
+
+
+app = FastAPI(
+    title="Aquinas Logic API",
+    lifespan=lifespan,
+    dependencies=[Depends(require_api_key)],
+)
 generation_service = AquinasGenerationService(
     generate_aquinas,
     fast_generator=generate_aquinas_fast,
@@ -61,14 +111,45 @@ generation_service = AquinasGenerationService(
     background_fast_generator=generate_aquinas_background_fast,
 )
 
-# This allows your web frontend to talk to this backend without security blocks
+# No browser/cookie client exists for this API (the iOS app calls it
+# directly), so credentials are never needed -- allow_credentials=True
+# combined with a wildcard origin is actually an invalid combination per the
+# CORS spec (browsers reject it outright), so it was silently doing nothing.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+_RATE_LIMIT_WINDOW_SECONDS = 60.0
+_RATE_LIMIT_MAX_REQUESTS = 30
+_rate_limit_lock = Lock()
+_rate_limit_hits: dict[str, deque[float]] = defaultdict(deque)
+
+# Single source of truth for the "Loose Thread" homepage section's display
+# name, so a future rename is a one-line change rather than a grep-and-replace.
+LOOSE_THREAD_DISPLAY_NAME = "Loose Thread"
+TODAY_IN_HISTORY_LINK_THRESHOLD = 0.60
+
+
+def rate_limit_generation(request: Request) -> None:
+    """A basic per-client sliding-window limiter on the generation-heavy
+    endpoints, to blunt naive resource-exhaustion abuse. Not a substitute for
+    a real gateway-level limiter in a multi-tenant deployment."""
+    client_key = request.client.host if request.client else "unknown"
+    now = time.monotonic()
+    with _rate_limit_lock:
+        hits = _rate_limit_hits[client_key]
+        while hits and now - hits[0] > _RATE_LIMIT_WINDOW_SECONDS:
+            hits.popleft()
+        if len(hits) >= _RATE_LIMIT_MAX_REQUESTS:
+            raise HTTPException(
+                status_code=429,
+                detail="Too many requests -- please slow down.",
+            )
+        hits.append(now)
 
 # Define the format we expect from the frontend
 class QueryRequest(BaseModel):
@@ -107,10 +188,22 @@ class ConversationImagePayload(BaseModel):
         )
 
 
+class ConversationInsightQuotePayload(BaseModel):
+    title: str = Field(min_length=1, max_length=300)
+    definition: str = Field(min_length=1, max_length=4_000)
+
+    def to_domain(self) -> ConversationInsightQuote:
+        return ConversationInsightQuote(
+            title=self.title,
+            definition=self.definition,
+        )
+
+
 class ConversationMessagePayload(BaseModel):
     role: str = Field(min_length=1, max_length=20)
     text: str = Field(min_length=1, max_length=8_000)
     images: list[ConversationImagePayload] = Field(default_factory=list, max_length=8)
+    insight_quote: ConversationInsightQuotePayload | None = None
 
     @field_validator("role")
     @classmethod
@@ -125,6 +218,11 @@ class ConversationMessagePayload(BaseModel):
             role=self.role,
             text=self.text,
             images=tuple(image.to_domain() for image in self.images),
+            insight_quote=(
+                self.insight_quote.to_domain()
+                if self.insight_quote is not None
+                else None
+            ),
         )
 
 
@@ -235,6 +333,55 @@ class DailyQuestionResponse(BaseModel):
     question: str
     reason_for_asking: str
     cited_insight_title: str | None = None
+
+
+class ConversationIdRequest(BaseModel):
+    conversation_id: str = Field(min_length=1, max_length=128)
+
+
+class LooseThreadResponse(BaseModel):
+    node_id: str
+    node_label: str
+    insight_count: int
+
+
+class GlossedTermResponse(BaseModel):
+    term_key: str
+    requested_term: str
+    title: str
+    part_of_speech: str
+    pronunciation: str
+    definition: str
+    example: str
+    context: str = ""
+
+
+class TodayInHistoryRequest(BaseModel):
+    conversation_id: str = Field(min_length=1, max_length=128)
+    override_date: str | None = Field(
+        default=None,
+        pattern=r"^\d{2}-\d{2}$",
+    )
+
+
+class TodayInHistoryResponse(BaseModel):
+    title: str
+    description: str
+    related_entity: str
+    linked_node_id: str | None = None
+
+
+class FlagQuoteRequest(BaseModel):
+    conversation_id: str = Field(min_length=1, max_length=128)
+    response_id: str = Field(min_length=1, max_length=128)
+    quote_text: str = Field(min_length=1, max_length=4_000)
+
+
+class YourQuoteResponse(BaseModel):
+    response_id: str
+    quote_text: str
+    source: str
+    reason: str | None = None
 
 
 class GeneratedKeyTermResponse(BaseModel):
@@ -491,20 +638,51 @@ def _definition_response(record: DynamicDefinitionRecord) -> ContextualDefinitio
     )
 
 
-# Define the Endpoint
-@app.post("/ask")
-def ask_endpoint(request: QueryRequest):
-    print(f"\n--- 🌐 Received API Request: {request.query} ---")
+def _flag_quote_if_notable(conversation_id: str, response_id: str, question: str) -> None:
+    """"Your Own Quote" Tier 2: an additive check riding inside the existing
+    tree-update analysis call. It must never fail or delay that call's own
+    result -- a broken or malformed notability check is swallowed here, not
+    surfaced as the /analyze route's HTTP error."""
+    if not is_heuristically_notable(question):
+        return
     try:
-        # Hand the question to your engine
+        notability: GeneratedQuoteNotability = generation_service.assess_quote_notability(
+            question
+        )
+    except StructuredGenerationError:
+        logger.warning(
+            "Quote notability check failed for %s/%s; skipping.",
+            conversation_id,
+            response_id,
+        )
+        return
+    if notability.is_notable_insight:
+        persistent_tree_service.save_flagged_quote(
+            conversation_id=conversation_id,
+            response_id=response_id,
+            quote_text=question,
+            source="heuristic_llm",
+            reason=notability.reason,
+        )
+
+
+# Define the Endpoint
+@app.post("/ask", dependencies=[Depends(rate_limit_generation)])
+def ask_endpoint(request: QueryRequest):
+    logger.info("Received /ask request (%d chars)", len(request.query))
+    try:
         answer = ask_aquinas(request.query)
         return {"response": answer}
-    except Exception as e:
-        print(f"Error: {e}")
+    except Exception:
+        logger.exception("The Logic Engine encountered an error.")
         raise HTTPException(status_code=500, detail="The Logic Engine encountered an error.")
 
 
-@app.post("/concept/define", response_model=ContextualDefinitionResponse)
+@app.post(
+    "/concept/define",
+    response_model=ContextualDefinitionResponse,
+    dependencies=[Depends(rate_limit_generation)],
+)
 def define_contextual_term(request: ContextualDefinitionRequest):
     try:
         definition = generation_service.define_term(
@@ -550,6 +728,7 @@ def lookup_contextual_term_for_conversation(
 @app.post(
     "/conversation/{conversation_id}/concept/define",
     response_model=ContextualDefinitionResponse,
+    dependencies=[Depends(rate_limit_generation)],
 )
 def define_contextual_term_for_conversation(
     conversation_id: str,
@@ -585,7 +764,7 @@ def define_contextual_term_for_conversation(
             example=definition.example,
             context=definition.context,
         )
-        tree_store.save_dynamic_definition(
+        persistent_tree_service.save_dynamic_definition(
             conversation_id=conversation_id,
             term_key=term_key,
             source_hash=source_hash,
@@ -604,18 +783,25 @@ def define_contextual_term_for_conversation(
 @app.post(
     "/conversation/respond",
     response_model=StructuredConversationResponsePayload,
+    dependencies=[Depends(rate_limit_generation)],
 )
 def respond_to_conversation(request: ConversationResponseRequest):
     try:
+        messages = [
+            message.to_domain()
+            for message in request.recent_messages
+        ]
+        grounding_passages = grounding_retriever.retrieve(
+            _latest_user_message_text(messages),
+            relatedness_provider,
+        )
         result = generation_service.respond(
-            [
-                message.to_domain()
-                for message in request.recent_messages
-            ],
+            messages,
             compacted_context=request.compacted_context,
             thinking_enabled=request.thinking_enabled,
             generation_mode=request.generation_mode,
             personality=request.personality,
+            grounding_passages=grounding_passages,
         )
         return StructuredConversationResponsePayload(
             response=result.response,
@@ -648,7 +834,11 @@ def respond_to_conversation(request: ConversationResponseRequest):
         ) from error
 
 
-@app.post("/home/question-of-the-day", response_model=DailyQuestionResponse)
+@app.post(
+    "/home/question-of-the-day",
+    response_model=DailyQuestionResponse,
+    dependencies=[Depends(rate_limit_generation)],
+)
 def generate_question_of_the_day(request: DailyQuestionRequest):
     try:
         result: GeneratedDailyQuestion = generation_service.generate_daily_question(
@@ -677,7 +867,75 @@ def generate_question_of_the_day(request: DailyQuestionRequest):
         ) from error
 
 
-@app.post("/conversation/respond/stream")
+@app.post(
+    "/home/loose-thread",
+    response_model=LooseThreadResponse | None,
+)
+def find_loose_thread(request: ConversationIdRequest):
+    conversation_id = validated_conversation_id(request.conversation_id)
+    result = tree_store.find_loose_thread(conversation_id)
+    return None if result is None else LooseThreadResponse(**result)
+
+
+@app.post(
+    "/home/glossed-terms",
+    response_model=GlossedTermResponse | None,
+)
+def find_glossed_term(request: ConversationIdRequest):
+    conversation_id = validated_conversation_id(request.conversation_id)
+    result = tree_store.find_glossed_term(conversation_id)
+    return None if result is None else GlossedTermResponse(**result)
+
+
+@app.post(
+    "/home/today-in-history",
+    response_model=TodayInHistoryResponse | None,
+)
+def today_in_history(request: TodayInHistoryRequest):
+    conversation_id = validated_conversation_id(request.conversation_id)
+    month_day = request.override_date or time.strftime("%m-%d")
+    entry = entry_for_date(month_day)
+    if entry is None:
+        return None
+    linked_node_id = tree_store.find_related_node(
+        conversation_id,
+        entry.related_entity,
+        TODAY_IN_HISTORY_LINK_THRESHOLD,
+        relatedness_provider,
+    )
+    return TodayInHistoryResponse(
+        title=entry.title,
+        description=entry.description,
+        related_entity=entry.related_entity,
+        linked_node_id=linked_node_id,
+    )
+
+
+@app.post("/home/flag-quote")
+def flag_quote(request: FlagQuoteRequest):
+    conversation_id = validated_conversation_id(request.conversation_id)
+    response_id = validated_conversation_id(request.response_id)
+    persistent_tree_service.save_flagged_quote(
+        conversation_id=conversation_id,
+        response_id=response_id,
+        quote_text=request.quote_text,
+        source="user_flagged",
+        reason=None,
+    )
+    return {"status": "flagged"}
+
+
+@app.post(
+    "/home/your-quote",
+    response_model=YourQuoteResponse | None,
+)
+def find_your_quote(request: ConversationIdRequest):
+    conversation_id = validated_conversation_id(request.conversation_id)
+    result = persistent_tree_service.find_surfaceable_quote(conversation_id)
+    return None if result is None else YourQuoteResponse(**result)
+
+
+@app.post("/conversation/respond/stream", dependencies=[Depends(rate_limit_generation)])
 def stream_conversation_response(request: ConversationResponseRequest):
     messages = [message.to_domain() for message in request.recent_messages]
     images = generation_service.conversation_images(messages)
@@ -685,6 +943,10 @@ def stream_conversation_response(request: ConversationResponseRequest):
     resolved_mode = resolve_conversation_generation_mode(
         messages,
         request.generation_mode,
+    )
+    grounding_passages = grounding_retriever.retrieve(
+        _latest_user_message_text(messages),
+        relatedness_provider,
     )
 
     def event_stream():
@@ -697,6 +959,7 @@ def stream_conversation_response(request: ConversationResponseRequest):
                 thinking_enabled=request.thinking_enabled,
                 generation_mode=resolved_mode,
                 personality=request.personality,
+                grounding_passages=grounding_passages,
             )
             parser = ConversationStreamParser()
             response_prefix = (
@@ -780,22 +1043,19 @@ def stream_conversation_response(request: ConversationResponseRequest):
                 ),
             )
             completed_at = time.perf_counter()
-            print(
-                json.dumps(
-                    {
-                        "event": "conversation_response_complete",
-                        "generation_mode": resolved_mode.value,
-                        "first_approved_field_seconds": (
-                            first_approved_field_at - request_started_at
-                            if first_approved_field_at is not None
-                            else None
-                        ),
-                        "total_seconds": completed_at - request_started_at,
-                        "repair_used": False,
-                    }
-                )
+            logger.info(
+                "conversation_response_complete mode=%s first_approved_field_seconds=%s "
+                "total_seconds=%.3f",
+                resolved_mode.value,
+                (
+                    f"{first_approved_field_at - request_started_at:.3f}"
+                    if first_approved_field_at is not None
+                    else None
+                ),
+                completed_at - request_started_at,
             )
         except Exception:
+            logger.exception("Streaming conversation response failed.")
             yield _stream_event(
                 "error",
                 detail="Aquinas did not return a valid streaming response.",
@@ -814,6 +1074,7 @@ def stream_conversation_response(request: ConversationResponseRequest):
 @app.post(
     "/conversation/compact",
     response_model=ConversationCompactionResponse,
+    dependencies=[Depends(rate_limit_generation)],
 )
 def compact_conversation(request: ConversationCompactionRequest):
     try:
@@ -845,6 +1106,30 @@ def relatedness_health():
     }
 
 
+@app.get("/health")
+def health():
+    """Broader liveness check covering everything a request actually
+    touches: MLX generation (loaded eagerly at import, so reaching this
+    handler at all proves it), the MiniLM relatedness provider, the Chroma
+    grounding index, and the SQLite Insight Tree store."""
+    checks = {
+        "generation_model": {"ok": True, "model": MODEL_DISPLAY_NAME},
+        "relatedness_provider": {
+            "ok": relatedness_provider.is_loaded,
+            "model": relatedness_provider.model_name,
+        },
+        "grounding_index": {"ok": grounding_retriever.is_loaded},
+    }
+    try:
+        checks["insight_tree_store"] = {"ok": tree_store.ping()}
+    except Exception as error:
+        logger.exception("Insight Tree store health check failed.")
+        checks["insight_tree_store"] = {"ok": False, "detail": str(error)}
+
+    overall_ok = all(check["ok"] for check in checks.values())
+    return {"status": "ready" if overall_ok else "degraded", "checks": checks}
+
+
 @app.post("/relatedness/similarity", response_model=SimilarityResponse)
 def relatedness_similarity(request: SimilarityRequest):
     try:
@@ -861,7 +1146,11 @@ def relatedness_similarity(request: SimilarityRequest):
         raise HTTPException(status_code=500, detail=str(error)) from error
 
 
-@app.post("/insight-tree/label-node", response_model=NodeSubjectResponse)
+@app.post(
+    "/insight-tree/label-node",
+    response_model=NodeSubjectResponse,
+    dependencies=[Depends(rate_limit_generation)],
+)
 def label_insight_tree_node(request: NodeSubjectRequest):
     try:
         subject = generation_service.label_tree_subject(request.insight_descriptions)
@@ -873,7 +1162,11 @@ def label_insight_tree_node(request: NodeSubjectRequest):
         ) from error
 
 
-@app.post("/concept/blend", response_model=MidpointCandidatesResponse)
+@app.post(
+    "/concept/blend",
+    response_model=MidpointCandidatesResponse,
+    dependencies=[Depends(rate_limit_generation)],
+)
 def blend_midpoint_concepts(request: MidpointBlendRequest):
     if len(request.concepts) != len(request.weights):
         raise HTTPException(
@@ -905,7 +1198,11 @@ def blend_midpoint_concepts(request: MidpointBlendRequest):
         ) from error
 
 
-@app.post("/concept/children", response_model=MakeNodeChildrenResponse)
+@app.post(
+    "/concept/children",
+    response_model=MakeNodeChildrenResponse,
+    dependencies=[Depends(rate_limit_generation)],
+)
 def generate_make_node_children(request: MakeNodeChildrenRequest):
     try:
         children = generation_service.generate_concept_children(
@@ -958,6 +1255,9 @@ def save_insight_to_tree(
         insight=request.insight.to_domain(),
     )
     if promoted is not None:
+        persistent_tree_service.mark_definition_promoted(
+            conversation_id, _definition_term_key(request.insight.title)
+        )
         return assignment_response(conversation_id, promoted)
 
     existing_tree = tree_store.snapshot(conversation_id)
@@ -973,6 +1273,9 @@ def save_insight_to_tree(
                     status_code=409,
                     detail="That Insight ID already exists with different content.",
                 )
+            persistent_tree_service.mark_definition_promoted(
+                conversation_id, _definition_term_key(request.insight.title)
+            )
             return TreeAssignmentResponse(
                 conversation_id=conversation_id,
                 action="attached",
@@ -992,6 +1295,9 @@ def save_insight_to_tree(
             insight=request.insight.to_domain(),
             membership_threshold=request.membership_threshold,
             suggested_node_label=request.suggested_node_label,
+        )
+        persistent_tree_service.mark_definition_promoted(
+            conversation_id, _definition_term_key(request.insight.title)
         )
         return assignment_response(conversation_id, decision)
     except ValueError as error:
@@ -1019,7 +1325,7 @@ def set_insight_tree_node_label(
     conversation_id = validated_conversation_id(conversation_id)
     node_id = validated_conversation_id(node_id)
     try:
-        tree_store.set_node_label(conversation_id, node_id, request.label)
+        persistent_tree_service.set_node_label(conversation_id, node_id, request.label)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     return tree_store.snapshot(conversation_id)
@@ -1027,6 +1333,7 @@ def set_insight_tree_node_label(
 
 @app.post(
     "/insight-tree/{conversation_id}/responses/{response_id}/analyze",
+    dependencies=[Depends(rate_limit_generation)],
     response_model=ResponseTreeAnalysisResponse,
 )
 def analyze_response_for_tree(
@@ -1042,6 +1349,7 @@ def analyze_response_for_tree(
             extraction = generation_service.analyze_tree_update(
                 question=request.question,
                 response=request.response,
+                tree_is_empty=not tree_store.has_nodes(conversation_id),
             )
             cached = persistent_tree_service.apply_response_update(
                 conversation_id=conversation_id,
@@ -1049,6 +1357,7 @@ def analyze_response_for_tree(
                 branch_id=request.branch_id,
                 extraction=extraction,
             )
+            _flag_quote_if_notable(conversation_id, response_id, request.question)
         except StructuredGenerationError as error:
             raise HTTPException(
                 status_code=502,
@@ -1080,6 +1389,13 @@ def remove_insight_from_tree(conversation_id: str, insight_id: str):
 
 if __name__ == "__main__":
     import uvicorn
-    # Starts the server on port 8000
-    print("--- 🚀 Starting Aquinas API Server on http://localhost:8000 ---")
+
+    logger.info("Starting Aquinas API Server on http://0.0.0.0:8000")
+    if not os.environ.get(API_KEY_ENV_VAR):
+        logger.warning(
+            "%s is not set -- every endpoint on this LAN-reachable server is "
+            "unauthenticated. Set %s before exposing this beyond a trusted network.",
+            API_KEY_ENV_VAR,
+            API_KEY_ENV_VAR,
+        )
     uvicorn.run(app, host="0.0.0.0", port=8000)

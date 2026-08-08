@@ -571,6 +571,257 @@ class PersistentInsightTreeTests(unittest.TestCase):
             )
         )
 
+    def test_promoting_definition_flags_it_as_promoted(self) -> None:
+        record = DynamicDefinitionRecord(
+            title="Prudence",
+            part_of_speech="noun",
+            pronunciation="PROO-dns",
+            definition="Right reason applied to action.",
+            example="Prudence governs the choice of means to a good end.",
+        )
+        self.store.save_dynamic_definition(
+            conversation_id="conversation-1",
+            term_key="prudence",
+            source_hash="source-a",
+            requested_term="Prudence",
+            source_excerpt="Prudence is the charioteer of the virtues.",
+            definition=record,
+        )
+
+        glossed = self.store.find_glossed_term("conversation-1", staleness_hours=0)
+        self.assertIsNotNone(glossed)
+        self.assertEqual(glossed["term_key"], "prudence")
+
+        self.store.mark_definition_promoted("conversation-1", "prudence")
+
+        self.assertIsNone(
+            self.store.find_glossed_term("conversation-1", staleness_hours=0)
+        )
+
+    def test_marking_unknown_term_promoted_is_a_no_op(self) -> None:
+        # Retry-safe: no matching row, so this must not raise.
+        self.store.mark_definition_promoted("conversation-1", "nonexistent")
+
+    def test_glossed_term_excludes_terms_within_the_staleness_window(self) -> None:
+        record = DynamicDefinitionRecord(
+            title="Temperance",
+            part_of_speech="noun",
+            pronunciation="TEM-per-ns",
+            definition="Moderation of desire for sensory pleasure.",
+            example="Temperance restrains excess in food and drink.",
+        )
+        self.store.save_dynamic_definition(
+            conversation_id="conversation-1",
+            term_key="temperance",
+            source_hash="source-a",
+            requested_term="Temperance",
+            source_excerpt="Temperance is one of the cardinal virtues.",
+            definition=record,
+        )
+
+        self.assertIsNone(
+            self.store.find_glossed_term("conversation-1", staleness_hours=24)
+        )
+
+    def test_find_related_node_matches_closest_node_above_threshold(self) -> None:
+        provider = InjectedScoreProvider()
+        service = PersistentInsightTreeService(
+            store=self.store,
+            engine=InsightTreeEngine(provider),
+            provider=provider,
+        )
+        service.apply_response_update(
+            "conversation-1",
+            "response-1",
+            "branch-1",
+            GeneratedTreeUpdate(
+                "First Principle",
+                "A summary of First Principle.",
+                GeneratedTreeInsightCandidate(
+                    label="First Principle",
+                    summary="The durable meaning of First Principle.",
+                    evidence_excerpt="First Principle",
+                ),
+            ),
+        )
+
+        matched_node_id = self.store.find_related_node(
+            "conversation-1", "First Principle", threshold=0.5, provider=provider
+        )
+        snapshot = self.store.snapshot("conversation-1")
+        self.assertEqual(matched_node_id, snapshot["nodes"][0]["id"])
+
+        # A threshold above every available similarity yields no match.
+        self.assertIsNone(
+            self.store.find_related_node(
+                "conversation-1", "First Principle", threshold=1.5, provider=provider
+            )
+        )
+
+    def test_find_related_node_returns_none_for_empty_conversation(self) -> None:
+        provider = InjectedScoreProvider()
+        self.assertIsNone(
+            self.store.find_related_node(
+                "conversation-1", "First Principle", threshold=0.5, provider=provider
+            )
+        )
+
+    def test_flagged_quote_round_trip_is_idempotent_same_day(self) -> None:
+        self.assertIsNone(self.store.find_surfaceable_quote("conversation-1"))
+
+        self.store.save_flagged_quote(
+            conversation_id="conversation-1",
+            response_id="response-1",
+            quote_text="Order in the universe implies an orderer.",
+            source="heuristic_llm",
+            reason="Original synthesis about design.",
+        )
+        # Retried save of the same (conversation, response, source) is a no-op.
+        self.store.save_flagged_quote(
+            conversation_id="conversation-1",
+            response_id="response-1",
+            quote_text="Order in the universe implies an orderer.",
+            source="heuristic_llm",
+            reason="Original synthesis about design.",
+        )
+
+        first_read = self.store.find_surfaceable_quote("conversation-1")
+        self.assertIsNotNone(first_read)
+        self.assertEqual(first_read["response_id"], "response-1")
+
+        second_read = self.store.find_surfaceable_quote("conversation-1")
+        self.assertEqual(second_read["response_id"], first_read["response_id"])
+
+    def test_flagged_quote_respects_resurface_cooldown(self) -> None:
+        self.store.save_flagged_quote(
+            conversation_id="conversation-1",
+            response_id="response-1",
+            quote_text="A quote worth resurfacing.",
+            source="user_flagged",
+            reason=None,
+        )
+        surfaced = self.store.find_surfaceable_quote("conversation-1", cooldown_days=14)
+        self.assertIsNotNone(surfaced)
+
+        # Still within the cooldown window and already surfaced today, so a
+        # second flagged quote for a different response must not replace it.
+        self.store.save_flagged_quote(
+            conversation_id="conversation-1",
+            response_id="response-2",
+            quote_text="A different quote.",
+            source="user_flagged",
+            reason=None,
+        )
+        still_same = self.store.find_surfaceable_quote("conversation-1", cooldown_days=14)
+        self.assertEqual(still_same["response_id"], "response-1")
+
+    def test_loose_thread_excludes_strongly_connected_nodes(self) -> None:
+        class LooseThreadProvider:
+            dimensions = 2
+            vectors = {
+                "Connected A": np.asarray([1.0, 0.0], dtype=np.float32),
+                "Connected B": np.asarray([0.75, 0.6614378], dtype=np.float32),
+                "Isolated C": np.asarray([0.0, -1.0], dtype=np.float32),
+            }
+
+            def embed(self, text):
+                for title, vector in self.vectors.items():
+                    if text.startswith(title):
+                        return vector
+                raise AssertionError(f"Missing injected vector for {text}")
+
+            def compare_embeddings(self, left, right):
+                similarity = float(np.dot(left, right))
+                return {
+                    "similarity": similarity,
+                    "relatedness": max(0.0, similarity),
+                    "distance": 1.0 - similarity,
+                }
+
+            def centroid(self, embeddings):
+                center = np.asarray(embeddings, dtype=np.float32).mean(axis=0)
+                return center / np.linalg.norm(center)
+
+        provider = LooseThreadProvider()
+        service = PersistentInsightTreeService(
+            store=self.store,
+            engine=InsightTreeEngine(provider),
+            provider=provider,
+        )
+        # A high membership_threshold forces each insight to become its own
+        # Node even though Connected A/B are similar enough (0.75) to end up
+        # with a strong edge between their two Nodes once rebuilt.
+        for insight_id, title in [
+            ("a", "Connected A"),
+            ("b", "Connected B"),
+            ("c", "Isolated C"),
+        ]:
+            service.assign_and_save(
+                conversation_id="conversation-1",
+                insight=TreeInsight(id=insight_id, title=title, definition=f"Definition of {title}."),
+                membership_threshold=0.9,
+            )
+
+        loose_thread = self.store.find_loose_thread("conversation-1")
+        self.assertIsNotNone(loose_thread)
+        self.assertEqual(loose_thread["node_label"], "Isolated C")
+
+    def test_loose_thread_tie_break_prefers_more_insights(self) -> None:
+        provider = InjectedScoreProvider()
+        service = PersistentInsightTreeService(
+            store=self.store,
+            engine=InsightTreeEngine(provider),
+            provider=provider,
+        )
+        service.apply_response_update(
+            "conversation-1",
+            "response-1",
+            "branch-1",
+            GeneratedTreeUpdate(
+                "Distinct Subject",
+                "A summary of Distinct Subject.",
+                GeneratedTreeInsightCandidate(
+                    label="Distinct Subject",
+                    summary="The durable meaning of Distinct Subject.",
+                    evidence_excerpt="Distinct Subject",
+                ),
+            ),
+        )
+        service.apply_response_update(
+            "conversation-1",
+            "response-2",
+            "branch-1",
+            GeneratedTreeUpdate(
+                "Third Subject",
+                "A summary of Third Subject.",
+                GeneratedTreeInsightCandidate(
+                    label="Third Subject",
+                    summary="The durable meaning of Third Subject.",
+                    evidence_excerpt="Third Subject",
+                ),
+            ),
+        )
+        # A second insight attached to Third Subject's node gives it the higher
+        # insight count, so it should win the tie-break over Distinct Subject
+        # -- neither has any edge crossing the strong threshold.
+        service.assign_and_save(
+            conversation_id="conversation-1",
+            insight=TreeInsight(
+                id="extra-insight",
+                title="Third Subject Detail",
+                definition="A closely related elaboration.",
+            ),
+            membership_threshold=0.05,
+        )
+
+        loose_thread = self.store.find_loose_thread("conversation-1")
+        self.assertIsNotNone(loose_thread)
+        self.assertEqual(loose_thread["node_label"], "Third Subject")
+        self.assertEqual(loose_thread["insight_count"], 2)
+
+    def test_loose_thread_returns_none_for_empty_conversation(self) -> None:
+        self.assertIsNone(self.store.find_loose_thread("conversation-1"))
+
 
 if __name__ == "__main__":
     unittest.main()

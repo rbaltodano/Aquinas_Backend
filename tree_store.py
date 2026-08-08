@@ -33,6 +33,8 @@ EMBEDDING_VERSION = 1
 INSIGHT_DUPLICATE_THRESHOLD = 0.86
 NEW_NODE_COHESION_THRESHOLD = 0.55
 NODE_EDGE_STRONG_THRESHOLD = 0.70
+GLOSSED_TERM_STALENESS_HOURS = 24
+FLAGGED_QUOTE_RESURFACE_COOLDOWN_DAYS = 14
 DEFAULT_DATABASE_PATH = Path(__file__).resolve().parent / "data" / "insight_tree.sqlite3"
 
 
@@ -49,6 +51,13 @@ class DynamicDefinitionRecord:
 class InsightTreeStore:
     def __init__(self, database_path: str | Path = DEFAULT_DATABASE_PATH) -> None:
         self.database_path = Path(database_path)
+
+    def ping(self) -> bool:
+        """Cheap liveness check for a health endpoint: can we open the
+        database file and run a trivial query."""
+        with self._connect() as connection:
+            connection.execute("SELECT 1").fetchone()
+        return True
 
     def initialize(self) -> None:
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
@@ -162,6 +171,30 @@ class InsightTreeStore:
                     PRIMARY KEY (conversation_id, source_response_id, title_key),
                     FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
                 );
+
+                CREATE INDEX IF NOT EXISTS node_edges_from_relatedness_index
+                    ON node_edges(from_node_id, relatedness);
+
+                CREATE INDEX IF NOT EXISTS node_edges_to_relatedness_index
+                    ON node_edges(to_node_id, relatedness);
+
+                CREATE TABLE IF NOT EXISTS flagged_quotes (
+                    id TEXT PRIMARY KEY,
+                    conversation_id TEXT NOT NULL,
+                    response_id TEXT NOT NULL,
+                    quote_text TEXT NOT NULL,
+                    source TEXT NOT NULL,
+                    reason TEXT,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    surfaced_at TEXT,
+                    FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+                );
+
+                CREATE INDEX IF NOT EXISTS flagged_quotes_conversation_index
+                    ON flagged_quotes(conversation_id);
+
+                CREATE UNIQUE INDEX IF NOT EXISTS flagged_quotes_response_source_index
+                    ON flagged_quotes(conversation_id, response_id, source);
                 """
             )
             self._ensure_column(connection, "nodes", "origin_node_id", "TEXT")
@@ -198,6 +231,20 @@ class InsightTreeStore:
                 "context",
                 "TEXT NOT NULL DEFAULT ''",
             )
+            self._ensure_column(
+                connection,
+                "dynamic_definitions",
+                "promoted_to_insight",
+                "INTEGER NOT NULL DEFAULT 0",
+            )
+
+    def has_nodes(self, conversation_id: str) -> bool:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT 1 FROM nodes WHERE conversation_id = ? LIMIT 1",
+                (conversation_id,),
+            ).fetchone()
+            return row is not None
 
     def load_nodes(self, conversation_id: str) -> list[TreeNode]:
         with self._connect() as connection:
@@ -1297,11 +1344,192 @@ class InsightTreeStore:
                 ),
             )
 
+    def find_loose_thread(self, conversation_id: str) -> dict | None:
+        """A Node with no edge at or above NODE_EDGE_STRONG_THRESHOLD to any other
+        Node -- it never earned a strong connection anywhere in the tree. Ties
+        prefer the Node with the most attached Insights (more invested-in but
+        still unconnected beats a thin, low-effort Node)."""
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT n.id AS node_id, n.label AS node_label, COUNT(i.id) AS insight_count
+                FROM nodes n
+                LEFT JOIN insights i ON i.owning_node_id = n.id
+                WHERE n.conversation_id = ?
+                  AND NOT EXISTS (
+                    SELECT 1 FROM node_edges e
+                    WHERE e.conversation_id = n.conversation_id
+                      AND (e.from_node_id = n.id OR e.to_node_id = n.id)
+                      AND e.relatedness >= ?
+                  )
+                GROUP BY n.id
+                ORDER BY insight_count DESC, n.created_at ASC
+                LIMIT 1
+                """,
+                (conversation_id, NODE_EDGE_STRONG_THRESHOLD),
+            ).fetchone()
+            if row is None:
+                return None
+            return {
+                "node_id": row["node_id"],
+                "node_label": row["node_label"],
+                "insight_count": row["insight_count"],
+            }
+
+    def find_glossed_term(
+        self,
+        conversation_id: str,
+        staleness_hours: int = GLOSSED_TERM_STALENESS_HOURS,
+    ) -> dict | None:
+        """A term the user looked up but never promoted into a saved Insight,
+        stale enough that it looks glossed over rather than mid-lookup."""
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT term_key, requested_term, title, part_of_speech, pronunciation,
+                       definition, example, context, created_at
+                FROM dynamic_definitions
+                WHERE conversation_id = ?
+                  AND promoted_to_insight = 0
+                  AND created_at <= datetime('now', ?)
+                ORDER BY created_at ASC
+                LIMIT 1
+                """,
+                (conversation_id, f"-{staleness_hours} hours"),
+            ).fetchone()
+            if row is None:
+                return None
+            return {
+                "term_key": row["term_key"],
+                "requested_term": row["requested_term"],
+                "title": row["title"],
+                "part_of_speech": row["part_of_speech"],
+                "pronunciation": row["pronunciation"],
+                "definition": row["definition"],
+                "example": row["example"],
+                "context": row["context"],
+            }
+
+    def mark_definition_promoted(self, conversation_id: str, term_key: str) -> None:
+        """Flip every cached lookup of this term in this conversation, regardless
+        of which source excerpt originally triggered the lookup -- a no-op UPDATE
+        when nothing matches, so it is safe to call unconditionally on every save."""
+        with self._connect() as connection:
+            connection.execute(
+                """
+                UPDATE dynamic_definitions
+                SET promoted_to_insight = 1
+                WHERE conversation_id = ? AND term_key = ?
+                """,
+                (conversation_id, term_key),
+            )
+
+    def find_related_node(
+        self,
+        conversation_id: str,
+        text: str,
+        threshold: float,
+        provider: MiniLMRelatednessProvider,
+    ) -> str | None:
+        """Best-matching Node for arbitrary text (e.g. a Today in History
+        related_entity), reusing already-stored Node embeddings rather than a
+        second similarity path."""
+        nodes = self.load_nodes(conversation_id)
+        if not nodes:
+            return None
+        query_embedding = provider.embed(text)
+        best_node = None
+        best_similarity = -1.0
+        for node in nodes:
+            similarity = provider.compare_embeddings(node.embedding, query_embedding)["similarity"]
+            if similarity > best_similarity:
+                best_similarity = similarity
+                best_node = node
+        if best_node is None or best_similarity < threshold:
+            return None
+        return best_node.id
+
+    def save_flagged_quote(
+        self,
+        conversation_id: str,
+        response_id: str,
+        quote_text: str,
+        source: str,
+        reason: str | None,
+    ) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                "INSERT OR IGNORE INTO conversations(id) VALUES (?)",
+                (conversation_id,),
+            )
+            connection.execute(
+                """
+                INSERT OR IGNORE INTO flagged_quotes(
+                    id, conversation_id, response_id, quote_text, source, reason
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    self._stable_id(f"{conversation_id}:quote:{response_id}:{source}"),
+                    conversation_id,
+                    response_id,
+                    quote_text,
+                    source,
+                    reason,
+                ),
+            )
+
+    def find_surfaceable_quote(
+        self,
+        conversation_id: str,
+        cooldown_days: int = FLAGGED_QUOTE_RESURFACE_COOLDOWN_DAYS,
+    ) -> dict | None:
+        """Idempotent within a day: a quote already surfaced today is returned
+        again without advancing state; otherwise the oldest eligible quote (never
+        surfaced, or surfaced before the cooldown window) is picked and marked."""
+        with self._connect() as connection:
+            already_today = connection.execute(
+                """
+                SELECT id, response_id, quote_text, source, reason
+                FROM flagged_quotes
+                WHERE conversation_id = ? AND date(surfaced_at) = date('now')
+                ORDER BY surfaced_at DESC
+                LIMIT 1
+                """,
+                (conversation_id,),
+            ).fetchone()
+            if already_today is not None:
+                return dict(already_today)
+
+            candidate = connection.execute(
+                """
+                SELECT id, response_id, quote_text, source, reason
+                FROM flagged_quotes
+                WHERE conversation_id = ?
+                  AND (surfaced_at IS NULL OR surfaced_at <= datetime('now', ?))
+                ORDER BY created_at ASC
+                LIMIT 1
+                """,
+                (conversation_id, f"-{cooldown_days} days"),
+            ).fetchone()
+            if candidate is None:
+                return None
+            connection.execute(
+                "UPDATE flagged_quotes SET surfaced_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (candidate["id"],),
+            )
+            return dict(candidate)
+
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
-        connection = sqlite3.connect(self.database_path)
+        connection = sqlite3.connect(self.database_path, timeout=30)
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys = ON")
+        # WAL lets readers and a writer proceed concurrently instead of
+        # blocking; busy_timeout makes a genuinely contended write wait up to
+        # 30s rather than raising "database is locked" immediately.
+        connection.execute("PRAGMA journal_mode = WAL")
+        connection.execute("PRAGMA busy_timeout = 30000")
         try:
             yield connection
             connection.commit()
@@ -1466,6 +1694,30 @@ class PersistentInsightTreeService:
                 provider=self.provider,
                 engine=self.engine,
             )
+
+    def save_dynamic_definition(self, **kwargs) -> None:
+        with self._mutation_lock:
+            self.store.save_dynamic_definition(**kwargs)
+
+    def set_node_label(self, conversation_id: str, node_id: str, label: str) -> None:
+        with self._mutation_lock:
+            self.store.set_node_label(conversation_id, node_id, label)
+
+    def mark_definition_promoted(self, conversation_id: str, term_key: str) -> None:
+        with self._mutation_lock:
+            self.store.mark_definition_promoted(conversation_id, term_key)
+
+    def save_flagged_quote(self, **kwargs) -> None:
+        with self._mutation_lock:
+            self.store.save_flagged_quote(**kwargs)
+
+    def find_surfaceable_quote(
+        self,
+        conversation_id: str,
+        cooldown_days: int = FLAGGED_QUOTE_RESURFACE_COOLDOWN_DAYS,
+    ) -> dict | None:
+        with self._mutation_lock:
+            return self.store.find_surfaceable_quote(conversation_id, cooldown_days)
 
 
 tree_store = InsightTreeStore()

@@ -8,8 +8,10 @@ from structured_generation import (
     DAILY_QUESTION_MAX_TOKENS,
     MIDPOINT_GENERATION_MAX_TOKENS,
     MAKE_NODE_GENERATION_MAX_TOKENS,
+    QUOTE_NOTABILITY_MAX_TOKENS,
     ConversationGenerationMode,
     ConversationImage,
+    ConversationInsightQuote,
     ConversationPersonality,
     ConversationMessage,
     ConversationStreamParser,
@@ -18,6 +20,7 @@ from structured_generation import (
     STRUCTURED_GENERATION_MAX_TOKENS,
     TREE_ANALYSIS_MAX_TOKENS,
     StructuredGenerationError,
+    is_heuristically_notable,
     requested_definition_term,
     resolve_conversation_generation_mode,
 )
@@ -285,6 +288,78 @@ class AquinasGenerationServiceTests(unittest.TestCase):
         self.assertTrue(result.question.endswith("?"))
         self.assertEqual(len(generator.calls), 2)
         self.assertIn("<TASK:REPAIR_QUESTION_OF_THE_DAY>", generator.calls[1][0])
+
+    def test_quote_notability_parses_valid_output(self) -> None:
+        generator = RecordingGenerator(
+            [
+                json.dumps(
+                    {
+                        "is_notable_insight": True,
+                        "reason": "A genuinely original synthesis.",
+                    }
+                )
+            ]
+        )
+        service = AquinasGenerationService(generator, background_generator=generator)
+
+        result = service.assess_quote_notability("Some quote text.")
+
+        self.assertTrue(result.is_notable_insight)
+        self.assertEqual(result.reason, "A genuinely original synthesis.")
+        self.assertEqual(len(generator.calls), 1)
+        self.assertEqual(generator.calls[0][1], QUOTE_NOTABILITY_MAX_TOKENS)
+
+    def test_quote_notability_repairs_invalid_output_once(self) -> None:
+        generator = RecordingGenerator(
+            [
+                "not json",
+                json.dumps({"is_notable_insight": False, "reason": None}),
+            ]
+        )
+        service = AquinasGenerationService(generator, background_generator=generator)
+
+        result = service.assess_quote_notability("Some quote text.")
+
+        self.assertFalse(result.is_notable_insight)
+        self.assertIsNone(result.reason)
+        self.assertEqual(len(generator.calls), 2)
+        self.assertIn("<TASK:REPAIR_QUOTE_NOTABILITY>", generator.calls[1][0])
+
+    def test_quote_notability_raises_when_repair_also_fails(self) -> None:
+        generator = RecordingGenerator(["not json", "still not json"])
+        service = AquinasGenerationService(generator, background_generator=generator)
+
+        with self.assertRaises(StructuredGenerationError):
+            service.assess_quote_notability("Some quote text.")
+
+    def test_quote_notability_rejects_non_boolean_field(self) -> None:
+        generator = RecordingGenerator(
+            [
+                json.dumps({"is_notable_insight": "yes", "reason": None}),
+                json.dumps({"is_notable_insight": "yes", "reason": None}),
+            ]
+        )
+        service = AquinasGenerationService(generator, background_generator=generator)
+
+        with self.assertRaises(StructuredGenerationError):
+            service.assess_quote_notability("Some quote text.")
+
+    def test_heuristic_notability_rejects_short_question_and_filler_messages(self) -> None:
+        self.assertFalse(is_heuristically_notable("Short."))
+        self.assertFalse(
+            is_heuristically_notable(
+                "Is this long enough to pass the length check for a question?"
+            )
+        )
+        self.assertFalse(is_heuristically_notable("Thanks!"))
+
+    def test_heuristic_notability_accepts_a_long_declarative_message(self) -> None:
+        self.assertTrue(
+            is_heuristically_notable(
+                "If every voluntary act requires a prior deliberation, then habitual "
+                "action seems to lose its voluntary character entirely, which cannot be right."
+            )
+        )
 
     def test_automatic_generation_mode_defaults_to_fast(self) -> None:
         mode = resolve_conversation_generation_mode(
@@ -1037,6 +1112,40 @@ class AquinasGenerationServiceTests(unittest.TestCase):
         self.assertEqual(procedural.subject_label, "")
         self.assertEqual(procedural.subject_summary, "")
 
+    def test_tree_is_empty_suppresses_trivial_turn_filter_by_default(self) -> None:
+        generator = RecordingGenerator([])
+        service = AquinasGenerationService(generator)
+
+        result = service.analyze_tree_update("Thanks?", "You're welcome!")
+
+        self.assertEqual(result.subject_label, "")
+        self.assertEqual(result.subject_summary, "")
+        self.assertIsNone(result.insight_candidate)
+        self.assertEqual(generator.calls, [])
+
+    def test_tree_is_empty_bypasses_trivial_turn_filter(self) -> None:
+        generator = RecordingGenerator(
+            [
+                json.dumps(
+                    {
+                        "subject": {"label": "Gratitude", "summary": "A seed subject."},
+                        "insight_candidate": None,
+                    }
+                )
+            ]
+        )
+        service = AquinasGenerationService(generator)
+
+        result = service.analyze_tree_update(
+            "Thanks?",
+            "You're welcome!",
+            tree_is_empty=True,
+        )
+
+        self.assertEqual(len(generator.calls), 1)
+        self.assertEqual(result.subject_label, "Gratitude")
+        self.assertEqual(result.subject_summary, "A seed subject.")
+
     def test_compacts_existing_checkpoint_and_recent_turns(self) -> None:
         generator = RecordingGenerator(
             ['{"summary":"The user is studying natural law and has distinguished it from civil law."}']
@@ -1640,6 +1749,37 @@ class AquinasGenerationServiceTests(unittest.TestCase):
                     )
                 ]
             )
+        )
+
+    def test_quoted_insight_precedes_question_in_conversation_prompt(self) -> None:
+        service = AquinasGenerationService(RecordingGenerator([]))
+
+        prompt = service.conversation_prompt(
+            [
+                ConversationMessage(
+                    role="user",
+                    text="How does this relate to moral choice?",
+                    insight_quote=ConversationInsightQuote(
+                        title="Act & Potency",
+                        definition="A capacity < ordered toward > actuality.",
+                    ),
+                )
+            ]
+        )
+
+        quote = (
+            "<insight_quote>\n"
+            "<title>Act &amp; Potency</title>\n"
+            "<definition>A capacity &lt; ordered toward &gt; actuality.</definition>\n"
+            "</insight_quote>"
+        )
+        question = "User question:\nHow does this relate to moral choice?"
+        self.assertIn(quote, prompt)
+        self.assertIn(question, prompt)
+        self.assertLess(prompt.index(quote), prompt.index(question))
+        self.assertIn(
+            "the Insight the user deliberately selected",
+            " ".join(prompt.split()),
         )
 
     def test_stream_parser_exposes_summary_then_response_deltas(self) -> None:

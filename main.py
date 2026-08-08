@@ -1,7 +1,10 @@
+import queue
 import re
+import threading
 import time
 
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 from typing import Sequence
 
@@ -18,12 +21,44 @@ from model_identity import (
     MODEL_RUNTIME_PATH,
 )
 
+# MLX tracks its execution stream per-thread, and internal state created
+# during model load (KV-cache buffers, compiled graphs) stays bound to the
+# thread that created it — reusing it from a different thread later fails
+# with "There is no Stream(cpu, 0) in current thread" even after that other
+# thread has its own stream registered. Loading the model and running every
+# later generation call on this exact same dedicated thread avoids the
+# cross-thread handoff entirely, rather than trying to make hand-off safe.
+#
+# Stream setup itself is done lazily inside _ensure_mlx_stream_ready, called
+# only from the real generation call sites below — not as an executor-wide
+# initializer. Tests load this module with mlx_vlm replaced by a fake object
+# (see test_prompt_assembly.py) purely to exercise import-time guards, and
+# must never be forced to touch the real mlx.core just because a fake load()
+# happened to run on this thread.
+_mlx_thread = ThreadPoolExecutor(max_workers=1, thread_name_prefix="mlx-generation")
+_mlx_thread_local = threading.local()
+
+
+def _run_on_mlx_thread(fn, *args, **kwargs):
+    return _mlx_thread.submit(fn, *args, **kwargs).result()
+
+
+def _ensure_mlx_stream_ready() -> None:
+    if getattr(_mlx_thread_local, "stream_ready", False):
+        return
+    import mlx.core as mx
+
+    mx.set_default_stream(mx.new_stream(mx.default_device()))
+    _mlx_thread_local.stream_ready = True
+
+
 print(
     f"--- ⏳ 1. Loading Aquinas ({MODEL_DISPLAY_NAME}) from "
     f"{MODEL_RUNTIME_PATH} with {MODEL_ADAPTER_PATH}... ---"
 )
 start_time = time.time()
-model, processor = load(
+model, processor = _run_on_mlx_thread(
+    load,
     MODEL_RUNTIME_PATH,
     adapter_path=MODEL_ADAPTER_PATH,
 )
@@ -147,14 +182,18 @@ def generate_aquinas(
             f'{{"event":"generation_start","priority":"foreground",'
             f'"queue_wait_seconds":{lease.queue_wait_seconds:.3f}}}'
         )
-        response = generate(
-            model,
-            processor,
-            prompt=prompt,
-            image=_image_inputs(images),
-            max_tokens=max_tokens,
-            verbose=False
-        ).text
+        def _generate() -> str:
+            _ensure_mlx_stream_ready()
+            return generate(
+                model,
+                processor,
+                prompt=prompt,
+                image=_image_inputs(images),
+                max_tokens=max_tokens,
+                verbose=False
+            ).text
+
+        response = _run_on_mlx_thread(_generate)
 
     # Remove a hidden thought channel if this model emits one.
     clean_response = re.sub(
@@ -181,14 +220,18 @@ def generate_aquinas_fast(
     )
     started_at = time.perf_counter()
     with generation_coordinator.session("foreground") as lease:
-        response = generate(
-            model,
-            processor,
-            prompt=prompt,
-            image=_image_inputs(images),
-            max_tokens=max_tokens,
-            verbose=False,
-        ).text
+        def _generate() -> str:
+            _ensure_mlx_stream_ready()
+            return generate(
+                model,
+                processor,
+                prompt=prompt,
+                image=_image_inputs(images),
+                max_tokens=max_tokens,
+                verbose=False,
+            ).text
+
+        response = _run_on_mlx_thread(_generate)
     print(
         f'{{"event":"generation_complete","mode":"fast",'
         f'"queue_wait_seconds":{lease.queue_wait_seconds:.3f},'
@@ -223,17 +266,49 @@ def generate_aquinas_stream(
     first_fragment_at: float | None = None
     generated_tokens = 0
     with generation_coordinator.session(priority) as lease:
-        for response in stream_generate(
-            model,
-            processor,
-            prompt=prompt,
-            image=_image_inputs(images),
-            max_tokens=max_tokens,
-        ):
-            if lease.cancel_event.is_set():
+        # stream_generate must be iterated on the dedicated MLX thread (see
+        # _run_on_mlx_thread), but this function needs to yield chunks back to
+        # whatever thread called generate_aquinas_stream. Bridge the two with
+        # a queue: a producer job on the MLX thread pushes each chunk (or a
+        # terminal error/sentinel), and this generator drains it.
+        chunk_queue: queue.Queue = queue.Queue()
+        _SENTINEL = object()
+
+        def _produce() -> None:
+            try:
+                _ensure_mlx_stream_ready()
+                for response in stream_generate(
+                    model,
+                    processor,
+                    prompt=prompt,
+                    image=_image_inputs(images),
+                    max_tokens=max_tokens,
+                ):
+                    if lease.cancel_event.is_set():
+                        # Stop driving the generator forward immediately, on the
+                        # same thread that's actually producing tokens, rather
+                        # than letting it keep generating after preemption.
+                        chunk_queue.put(("preempted", None))
+                        return
+                    chunk_queue.put(("chunk", response))
+            except Exception as exc:  # noqa: BLE001 - forwarded to the consumer thread
+                chunk_queue.put(("error", exc))
+            finally:
+                chunk_queue.put((_SENTINEL, None))
+
+        _mlx_thread.submit(_produce)
+
+        while True:
+            kind, payload = chunk_queue.get()
+            if kind is _SENTINEL:
+                break
+            if kind == "error":
+                raise payload
+            if kind == "preempted":
                 raise GenerationPreempted(
                     "Background generation was preempted by foreground work."
                 )
+            response = payload
             generated_tokens = response.generation_tokens
             if response.text:
                 if first_fragment_at is None:

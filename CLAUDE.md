@@ -22,6 +22,9 @@ source of truth. Read [`INSIGHT-TREE.md`](../Aquinas-Foundations/INSIGHT-TREE.md
 - Streaming is filtered. Raw model output and hidden scratch-work channels never go to clients.
 - Conversation messages accept bounded image attachments. The backend validates and decodes them,
   then supplies at most the eight most recent images to Gemma 4 in transcript order.
+- Conversation messages may include one structured `insight_quote`. Prompt assembly escapes its
+  title and definition into an `<insight_quote>` block immediately before the associated user
+  question, while routing and direct-definition detection continue to inspect the plain question.
 - Contextual definitions can be cached by conversation, normalized term, and source-response hash.
 - `/conversation/compact` creates a replacement checkpoint for older model context while the
   client keeps its visible transcript.
@@ -44,6 +47,16 @@ source of truth. Read [`INSIGHT-TREE.md`](../Aquinas-Foundations/INSIGHT-TREE.md
   artifact is `models/Aquinas-Final-LiteRT/model.litertlm`; it is 2,722,385,120 bytes with SHA-256
   `5cb26c8e29d52ecf3e2b651e590761fe593dddcab0cbcdac7dc0692605ee5569`. Models remain
   gitignored and must never be committed.
+- The isolated replacement candidate
+  `models/Qwen3-4B-LiteRT/qwen3_4b_mixed_int4.litertlm` is 2,659,057,664 bytes with SHA-256
+  `f0794bc77efeaaf4f7af815f04c483b19b8f2ae4a102cef1b7b760a25848a18e`. It is rejected diagnostic
+  input only: simulator Metal could not allocate its 388,956,160-byte tensor, and the base iPhone
+  17 was terminated during initialization before generation. Do not promote, bundle, or fine-tune
+  this package as the current replacement.
+- Broad factual reliability is not a prompt-patching task. The planned path is automated ingestion
+  of approved licensed/versioned sources, MiniLM passage retrieval, evidence-bound generation,
+  citations, claim validation, and explicit uncertainty or approved online lookup when retrieval
+  is insufficient. Fine-tuning should remain behavior/voice-focused.
 
 ## Architecture
 
@@ -195,6 +208,62 @@ litert_conversion_env/bin/python scripts/export_litert_aquinas.py \
   --source models/Aquinas-Final-HF \
   --output models/Aquinas-Final-LiteRT
 ```
+
+The current LiteRT toolchain has no standard 6-bit Gemma recipe. The non-destructive
+higher-precision phone candidate uses 8-bit fully connected weights with 4-bit embedding tables:
+
+```sh
+litert_conversion_env/bin/python scripts/export_litert_aquinas.py \
+  --source models/Aquinas-Final-HF \
+  --output models/Aquinas-Final-LiteRT-8fc4emb \
+  --quantization-recipe dynamic_wi8_emb4_afp32
+```
+
+Never overwrite the working 4-bit artifact. A higher-precision package replaces it only after
+package-size, cold-load, sustained-memory, latency, and blind answer-quality checks pass on the
+base supported phone.
+
+The August 1, 2026 `8fc4emb` candidate is 3,862,121,696 bytes with SHA-256
+`9a6345f1a6cd39283f957977c84d31cc63b8dd56f2b8fffeb784940f63365282`, under
+`models/Aquinas-Final-LiteRT-8fc4emb/`.
+
+**August 3, 2026 correction — the original GPU rejection was a Simulator-only artifact, not a
+real-device limitation. The candidate is confirmed working on GPU on the base supported iPhone.**
+Its original rejection was based solely on an iOS Simulator probe failure
+(`Failed to initialize kernel`). The stock (non-fine-tuned) `gemma-4-E2B-it.litertlm` from
+`litert-community` on Hugging Face — byte-identical (2,588,147,712 bytes) to the copy in
+`models/LiteRT-Stock/` — showed the same Simulator-only failure pattern (a Metal
+texture-binding-limit error), yet Google's own published benchmark shows that exact file running
+at 56.5 tokens/sec GPU decode on a real iPhone 17 Pro. Bumping the vendored LiteRT-LM runtime from
+v0.12.0 to v0.14.0 (`Vendor/LiteRTLM/Package.swift` in `Aquinas-iOS`) did not change the Simulator
+failure, confirming it's environment-specific, not a package or architecture-support issue.
+
+Both the stock package and this `8fc4emb` candidate were then tested directly on a physical base
+iPhone 17 (via `xcrun devicectl device copy to` into the app's Documents container, then
+`--litert-probe --litert-probe-auto --litert-model-document`) and **both passed cleanly on GPU**:
+
+- Stock `gemma-4-E2B-it.litertlm`: 2.59 GB, 3.89 s cold load, 0.78 s generation.
+- `8fc4emb` candidate: 3.86 GB, 9.3 s cold load, 2.44 s generation. Roughly 2x the current 4-bit
+  package's cold-load and generation time (4.33 s / 1.27 s) — expected for the precision increase,
+  and still well within usable range.
+
+(An earlier same-night attempt appeared to hang with no log output; that was a `devicectl`
+console-streaming artifact, not a real failure — confirmed by a clean rerun with the phone
+unlocked and the app foregrounded. Don't trust silence in a `devicectl --console` stream as a
+hang; check the actual on-device UI.)
+
+**Still not yet validated before this can replace the shipping manifest** — the project's own
+gate is package-size, cold-load, sustained-memory, latency, *and* blind answer-quality on the base
+supported phone. So far only a single one-shot probe generation has been measured. Missing:
+sustained-memory/thermal behavior across a real multi-turn conversation (not just one probe
+generation), and a proper blind answer-quality comparison against the current 4-bit package on
+several prompts, not just "What is prudence?". Do not change the iOS manifest to this artifact
+until those remaining gates pass.
+
+This also means the llama.cpp migration (`Aquinas-Foundations/LLAMA-CPP-MIGRATION-SCOPING.md`)
+may not be necessary — its entire premise was a LiteRT-LM GPU quality ceiling that turned out to
+be a Simulator artifact, not a real one. Re-promoting this already-existing LiteRT package after
+finishing the remaining validation gates is a much smaller change than a runtime migration.
 
 The exporter needs substantial temporary disk space; it deliberately refuses to start below
 40 GiB free. The staged helper can resume additional-model, vision, and packaging work in isolated

@@ -1,0 +1,493 @@
+# Grounding corpus manifest.
+#
+# license_status values (the ingestion script must hard-fail on anything
+# other than confirmed_pd unless explicitly overridden):
+#   confirmed_pd        - verified public domain, safe to download and ingest
+#   permission_required - rights-holder exists and reproduction needs written
+#                          permission; do not ingest until granted
+#   pending_verification - candidate text/translation not yet checked; starred
+#                          entries are waiting on a specific edition to be chosen
+#
+# Each entry's `url` is a placeholder for the eventual download source and is
+# not fetched by anything yet.
+
+sources:
+  - id: summa-theologica
+    title: Summa Theologica
+    category: theology
+    translation: Fathers of the English Dominican Province
+    license_status: confirmed_pd
+    notes: >
+      Aquinas's central systematic work. Provided as a pre-fetched local text
+      file rather than crawled from a URL; the Dominican Fathers translation
+      is public domain.
+    local_path: data/raw_data/summa_theologica.txt
+
+  - id: web-bible
+    title: World English Bible
+    category: scripture
+    translation: World English Bible (WEB)
+    license_status: confirmed_pd
+    notes: >
+      Publisher deliberately released the WEB to the public domain so a
+      modern-English public-domain Bible would exist. Primary scripture
+      source; queue for download first.
+    url: https://ebible.org/web/
+
+  - id: didache
+    title: The Didache (Teaching of the Twelve Apostles)
+    category: patristic
+    translation: Roberts-Donaldson (Ante-Nicene Fathers) or Hoole (1894)
+    license_status: confirmed_pd
+    notes: >
+      Both historical translations are public domain. Already referenced as
+      a hardcoded bootstrap note in AquinasGrounding.swift; this replaces
+      that with the full text.
+    url: https://www.earlychristianwritings.com/text/didache-roberts.html
+
+  - id: ccc
+    title: "Catechism of the Catholic Church *"
+    category: catechism
+    translation: USCCB / Libreria Editrice Vaticana English edition
+    license_status: permission_required
+    notes: >
+      Copyright held jointly by USCCB and Libreria Editrice Vaticana. Use
+      under 5,000 words does not require permission; the full catechism is
+      far larger, so ingesting it as a corpus needs written permission from
+      USCCB before downloading. Already the source for the 3 bootstrap
+      council notes (Nicaea 325, Constantinople 381, Nicaea II) — those
+      short excerpts are within the no-permission-needed threshold, but a
+      full-text ingest is not.
+    url: https://www.vatican.va/archive/ENG0015/_INDEX.HTM
+
+  - id: westminster-confession
+    title: Westminster Confession of Faith (1646)
+    category: confession
+    translation: original English text
+    license_status: confirmed_pd
+    notes: >
+      17th-century document, public domain. The generic Wikisource title is
+      a "versions of" index page; the 1647 first printing is the actual text.
+    url: https://en.wikisource.org/wiki/The_Humble_Advice_of_the_Assembly_of_Divines
+
+  - id: augsburg-confession
+    title: Augsburg Confession (1530)
+    category: confession
+    translation: standard English translation (e.g. Book of Concord PD edition)
+    license_status: confirmed_pd
+    notes: >
+      16th-century document. Verify the specific English translation edition
+      used is itself PD (older Book of Concord translations are; some modern
+      denominational re-translations are separately copyrighted). Full text
+      lives in the Concordia Triglotta (Bente/Dau translation), not the
+      generic Wikisource title.
+    url: https://en.wikisource.org/wiki/Concordia_Triglotta/The_Confession_of_Faith
+
+  - id: heidelberg-catechism
+    title: Heidelberg Catechism (1563)
+    category: confession
+    translation: standard English translation
+    license_status: confirmed_pd
+    notes: Same translation-edition caveat as Augsburg Confession above.
+    url: https://en.wikisource.org/wiki/The_Heidelberg_Catechism
+
+  - id: belgic-confession
+    title: Belgic Confession (1561)
+    category: confession
+    translation: standard English translation
+    license_status: confirmed_pd
+    notes: >
+      Same translation-edition caveat as Augsburg Confession above. Full text
+      is the Guido de Bres translation in the Reformed Dutch Church
+      constitution, not the generic Wikisource title.
+    url: https://en.wikisource.org/wiki/The_Constitution_of_the_Reformed_Dutch_Church_of_North_America/The_Confession_of_Faith
+
+  - id: thirty-nine-articles
+    title: Thirty-Nine Articles (1571)
+    category: confession
+    translation: original English text
+    license_status: confirmed_pd
+    notes: >
+      Church of England foundational document, public domain. Full text is
+      in the 1863 Book of Common Prayer, not the generic disambiguation title.
+    url: https://en.wikisource.org/wiki/Book_of_Common_Prayer_(1863)/Articles_of_Religion
+
+  # --- philosophy: primary sources Aquinas cites directly ---
+
+  - id: aristotle-nicomachean-ethics
+    title: Nicomachean Ethics
+    category: philosophy
+    translation: W. D. Ross (1908) or older Bohn's Classical Library edition
+    license_status: confirmed_pd
+    notes: >
+      Aquinas's own commentary quotes this constantly. Prefer an
+      early-20th-century-or-older translation to stay clearly PD; verify the
+      exact edition before download.
+    url: https://en.wikisource.org/wiki/Nicomachean_Ethics_(Ross)
+
+  - id: aristotle-metaphysics
+    title: Metaphysics
+    category: philosophy
+    translation: W. D. Ross (1908) or older
+    license_status: confirmed_pd
+    notes: Core source for Aquinas's act/potency and causation vocabulary.
+    url: https://en.wikisource.org/wiki/Metaphysics_(Ross,_1908)
+
+  - id: aristotle-physics
+    title: Physics
+    category: philosophy
+    translation: R. P. Hardie and R. K. Gaye (1930) or older
+    license_status: pending_verification
+    notes: Background for Aquinas's cosmological arguments. No confirmed download URL identified yet.
+    url: null
+
+  - id: aristotle-de-anima
+    title: On the Soul (De Anima)
+    category: philosophy
+    translation: J. A. Smith (1931) or older
+    license_status: pending_verification
+    notes: Foundational for Aquinas's psychology/anthropology. No confirmed download URL identified yet.
+    url: null
+
+  - id: augustine-confessions
+    title: Confessions
+    category: philosophy
+    translation: Nicene and Post-Nicene Fathers (NPNF) series, 19th century
+    license_status: confirmed_pd
+    notes: >
+      Aquinas cites Augustine more than any authority besides Scripture and
+      Aristotle. The ingestion script now crawls New Advent's per-chapter
+      pages when the given URL is a table-of-contents page.
+    url: https://www.newadvent.org/fathers/1101.htm
+
+  - id: augustine-city-of-god
+    title: City of God
+    category: philosophy
+    translation: NPNF series
+    license_status: confirmed_pd
+    notes: Same New Advent chapter-crawling fetch as Confessions above.
+    url: https://www.newadvent.org/fathers/1201.htm
+
+  - id: boethius-consolation
+    title: The Consolation of Philosophy
+    category: philosophy
+    translation: W. V. Cooper (1902) or older
+    license_status: confirmed_pd
+    notes: >
+      Directly commented on by Aquinas. Full text is the James translation's
+      subpage set, not the generic Wikisource title (which is a short
+      redirect/index page).
+    url: https://en.wikisource.org/wiki/The_Consolation_of_Philosophy_(James)
+
+  - id: anselm-proslogion
+    title: Proslogion
+    category: philosophy
+    translation: Sidney Norton Deane (1903)
+    license_status: confirmed_pd
+    notes: The ontological argument Aquinas explicitly discusses and rejects.
+    url: https://sourcebooks.fordham.edu/basis/anselm-proslogium.asp
+
+  - id: pseudo-dionysius-divine-names
+    title: The Divine Names / Mystical Theology
+    category: philosophy
+    translation: TBD (C. E. Rolt 1920 edition is a common candidate)
+    license_status: pending_verification
+    notes: >
+      Heavily cited by Aquinas on negative theology. The Rolt 1920
+      translation is a likely candidate but its exact US PD status needs a
+      quick check before download rather than assuming it.
+    url: null
+
+  - id: plato-republic
+    title: Republic
+    category: philosophy
+    translation: Benjamin Jowett (19th century)
+    license_status: pending_verification
+    notes: >
+      Jowett's translations are the standard PD choice for Plato. Both the
+      generic title and "The Dialogues of Plato (Jowett)/Republic" resolve
+      to short index pages rather than the transcluded full text; needs a
+      working URL identified before ingestion.
+    url: https://en.wikisource.org/wiki/The_Republic
+
+  - id: plato-timaeus
+    title: Timaeus
+    category: philosophy
+    translation: Benjamin Jowett
+    license_status: pending_verification
+    notes: Relevant to Aquinas's cosmology discussions. No confirmed download URL identified yet.
+    url: null
+
+  # --- history ---
+
+  - id: eusebius-ecclesiastical-history
+    title: Ecclesiastical History
+    category: history
+    translation: NPNF series
+    license_status: confirmed_pd
+    notes: >
+      Primary source for early Church history, complements the council
+      entries above. Full text is at the specific work title, not the New
+      Advent index page.
+    url: https://en.wikisource.org/wiki/The_Ecclesiastical_History_of_Eusebius_Pamphilus
+
+  - id: josephus-antiquities
+    title: Antiquities of the Jews / The Jewish War
+    category: history
+    translation: William Whiston (1737, standard PD English edition)
+    license_status: confirmed_pd
+    notes: Standard PD historical source for Second Temple-era background.
+    url: https://en.wikisource.org/wiki/The_Antiquities_of_the_Jews
+
+  - id: gibbon-decline-and-fall
+    title: The History of the Decline and Fall of the Roman Empire
+    category: history
+    translation: original English text (1776-1789)
+    license_status: confirmed_pd
+    notes: >
+      Useful general-history background; note Gibbon's anti-clerical bias in
+      places, so treat as background context rather than doctrinal source.
+    url: https://en.wikisource.org/wiki/The_History_of_the_Decline_and_Fall_of_the_Roman_Empire
+
+  # --- philosophy/patristic: batch 2 ---
+
+  - id: peter-lombard-sentences
+    title: The Sentences (Libri Quattuor Sententiarum)
+    category: philosophy
+    translation: TBD — check for a complete PD English edition vs. partial modern translations
+    license_status: pending_verification
+    notes: >
+      Highest-priority addition: this is the textbook Aquinas's Summa is
+      structured around and that he wrote a formal commentary on (Scriptum
+      super Sententiis). Older full Latin editions are PD; a complete PD
+      English translation needs to be confirmed before download (modern
+      English translations of the Sentences, e.g. Mediaeval Sources in
+      Translation, are copyrighted).
+    url: null
+
+  - id: aristotle-categories
+    title: Categories
+    category: philosophy
+    translation: E. M. Edghill (1926) or older
+    license_status: confirmed_pd
+    notes: >
+      Underlies Aquinas's logic and treatment of substance/accident. Full
+      text is in the Works of Aristotle collection, not the generic title.
+    url: https://en.wikisource.org/wiki/The_Works_of_Aristotle/Categories
+
+  - id: aristotle-posterior-analytics
+    title: Posterior Analytics
+    category: philosophy
+    translation: G. R. G. Mure (1928) or older
+    license_status: pending_verification
+    notes: Underlies Aquinas's account of scientific demonstration. No confirmed download URL identified yet.
+    url: null
+
+  - id: athanasius-on-incarnation
+    title: On the Incarnation
+    category: philosophy
+    translation: NPNF series (Archibald Robertson)
+    license_status: confirmed_pd
+    notes: Foundational Christological source.
+    url: https://www.newadvent.org/fathers/2802.htm
+
+  - id: irenaeus-against-heresies
+    title: Against Heresies
+    category: philosophy
+    translation: Ante-Nicene Fathers series (Roberts-Donaldson)
+    license_status: confirmed_pd
+    notes: Early doctrinal-development and heresiology source.
+    url: https://www.newadvent.org/fathers/0103.htm
+
+  - id: justin-martyr-first-apology
+    title: First Apology
+    category: philosophy
+    translation: Ante-Nicene Fathers series
+    license_status: confirmed_pd
+    notes: Early Christian apologetic source.
+    url: https://www.newadvent.org/fathers/0126.htm
+
+  # --- history: batch 2 (Church history + secular) ---
+
+  - id: bede-ecclesiastical-history
+    title: Ecclesiastical History of the English People
+    category: history
+    translation: A. M. Sellar (1907) or older
+    license_status: confirmed_pd
+    notes: >
+      Major PD medieval Church-history source. The Sellar-translation
+      edition (Jane) is the one with full transcluded text; the generic
+      title is a short stub.
+    url: https://en.wikisource.org/wiki/Ecclesiastical_History_of_the_English_Nation_(Jane)
+
+  - id: council-of-trent
+    title: Canons and Decrees of the Council of Trent
+    category: history
+    translation: J. Waterworth (1848)
+    license_status: confirmed_pd
+    notes: >
+      Extends existing council coverage into the Counter-Reformation, pairs
+      with the Protestant confessions above. fordham.edu returned HTTP 500
+      on the last ingestion attempt (site-side, not a manifest issue) —
+      retry later rather than assuming it's permanently unavailable.
+    url: https://sourcebooks.fordham.edu/basis/trent.asp
+
+  - id: thucydides-peloponnesian-war
+    title: History of the Peloponnesian War
+    category: history
+    translation: Richard Crawley (1874)
+    license_status: confirmed_pd
+    notes: >
+      Directly relevant: the fine-tuned model's documented factual error was
+      describing the Peloponnesian War as part of the Greco-Persian Wars
+      (see MODEL-INTEGRATION.md checkpoint). This is a targeted fix, not
+      just general coverage.
+    url: https://en.wikisource.org/wiki/History_of_the_Peloponnesian_War
+
+  - id: herodotus-histories
+    title: The Histories
+    category: history
+    translation: George Rawlinson (1858-1860)
+    license_status: confirmed_pd
+    notes: >
+      Primary source for the Greco-Persian Wars, pairs with Thucydides above
+      to fix the same documented confusion. Subpages redirect to "The
+      History of Herodotus (Rawlinson)" — the ingestion script now follows
+      Wikisource redirects, so this URL works as-is.
+    url: https://en.wikisource.org/wiki/History_of_Herodotus
+
+  - id: plutarch-parallel-lives
+    title: Parallel Lives
+    category: history
+    translation: John Dryden / Arthur Hugh Clough (19th century)
+    license_status: confirmed_pd
+    notes: >
+      Standard PD biographical/historical source for Greek and Roman
+      antiquity. Full text is the Clough translation's 49-life subpage set,
+      not the generic Wikisource title.
+    url: https://en.wikisource.org/wiki/Plutarch's_Lives_(Clough)
+
+  - id: tacitus-annals-histories
+    title: Annals and Histories
+    category: history
+    translation: Alfred John Church and William Jackson Brodribb (1876)
+    license_status: confirmed_pd
+    notes: Standard PD source for early Roman imperial history.
+    url: https://en.wikisource.org/wiki/The_Annals_(Tacitus)
+
+  - id: caesar-gallic-war
+    title: Commentaries on the Gallic War
+    category: history
+    translation: W. A. McDevitte and W. S. Bohn (1869)
+    license_status: pending_verification
+    notes: >
+      Standard PD primary source, late Roman Republic. The McDevitte/Bohn
+      translation is only linked as an "external scan" from Wikisource, not
+      hosted as transcribed text there; the T. Rice Holmes (1908) edition is
+      a transcription project but no working page was found yet. Needs a
+      real source identified before ingestion.
+    url: null
+
+  - id: livy-history-of-rome
+    title: History of Rome
+    category: history
+    translation: Rev. Canon Roberts (1905)
+    license_status: confirmed_pd
+    notes: >
+      Large text (46 books); ingest selectively rather than the full
+      multi-volume set if size becomes a concern. Full text is under its
+      literal English title "From the Founding of the City", not "The
+      History of Rome".
+    url: https://en.wikisource.org/wiki/From_the_Founding_of_the_City
+
+  - id: machiavelli-the-prince
+    title: The Prince
+    category: history
+    translation: W. K. Marriott (1908)
+    license_status: confirmed_pd
+    notes: >
+      Secular political-philosophy landmark, useful counterpoint to
+      Aquinas's own political theory. Full text is the Marriott-translation
+      edition, not the generic "versions of" index page.
+    url: https://en.wikisource.org/wiki/The_Prince_(Marriott)
+
+  - id: magna-carta
+    title: Magna Carta (1215)
+    category: history
+    translation: standard English translation
+    license_status: confirmed_pd
+    notes: >
+      Short, foundational document for the history of law and rights. Full
+      text is the Davis-translation edition, not the generic title (which is
+      a version-index stub).
+    url: https://en.wikisource.org/wiki/Magna_Carta_(trans._Davis)
+
+  - id: us-declaration-of-independence
+    title: Declaration of Independence
+    category: history
+    translation: original English text (1776)
+    license_status: confirmed_pd
+    notes: >
+      Split out from a previously bundled "founding documents" entry since
+      each has a different Wikisource structure. The engrossed-version page
+      has the actual transcribed text; the plain "Declaration of
+      Independence" title is a disambiguation page.
+    url: https://en.wikisource.org/wiki/Declaration_of_Independence_(engrossed_version)
+
+  - id: us-constitution
+    title: Constitution of the United States of America
+    category: history
+    translation: original English text (1787)
+    license_status: confirmed_pd
+    notes: Split out from the previously bundled founding-documents entry.
+    url: https://en.wikisource.org/wiki/Constitution_of_the_United_States_of_America
+
+  - id: federalist-papers
+    title: The Federalist Papers
+    category: history
+    translation: Hamilton, Jay, and Madison (1787-1788)
+    license_status: pending_verification
+    notes: >
+      Split out from the previously bundled founding-documents entry. Every
+      Wikisource title tried so far ("The Federalist", "The Federalist
+      (Hamilton, Jay and Madison)") resolves to a short "versions of" index
+      page rather than the 85 individual essays; needs the actual per-essay
+      collection identified before ingestion.
+    url: null
+
+  - id: adam-smith-wealth-of-nations
+    title: An Inquiry into the Nature and Causes of the Wealth of Nations
+    category: history
+    translation: original English text (1776)
+    license_status: confirmed_pd
+    notes: Foundational secular economic-history text.
+    url: https://en.wikisource.org/wiki/The_Wealth_of_Nations
+
+  # --- starred: other religious traditions, pending edition/list decisions ---
+
+  - id: quran-translation
+    title: "Quran (English translation) *"
+    category: scripture
+    translation: TBD — Yusuf Ali and Pickthall both have disputed US status
+    license_status: pending_verification
+    notes: >
+      STARRED. Neither Yusuf Ali (pro-forma US copyright registration
+      claimed through 2033) nor Pickthall (ambiguous US status, PD only in
+      death+50/+70 jurisdictions) is a clean confirmed-PD pick for US
+      distribution. Needs either a translation with an explicit open
+      license, or written permission, before ingestion.
+    url: null
+
+  - id: sutras-tbd
+    title: "Buddhist sutras (specific texts TBD) *"
+    category: scripture
+    translation: TBD — waiting on the specific list of sutras
+    license_status: pending_verification
+    notes: >
+      STARRED. Sacred Books of the East (Max Muller, Oxford, 1879-1910) is
+      confirmed public domain and is the safe default source. SuttaCentral
+      translations are CC BY-NC 4.0 — non-commercial only, blocked unless
+      Aquinas is free or the individual translator grants separate
+      permission. Each sutra must be checked against its specific
+      translator/publisher once the list arrives.
+    url: null

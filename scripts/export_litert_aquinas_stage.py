@@ -14,7 +14,18 @@ from litert_torch.generative.export_hf.core.exportable_module_config import (
 )
 
 
-def export_config(source: Path, work_dir: Path) -> ExportableModuleConfig:
+SUPPORTED_QUANTIZATION_RECIPES = (
+    "dynamic_wi4_afp32",
+    "dynamic_wi8_emb4_afp32",
+    "dynamic_wi8_afp32",
+)
+
+
+def export_config(
+    source: Path,
+    work_dir: Path,
+    quantization_recipe: str,
+) -> ExportableModuleConfig:
     return ExportableModuleConfig(
         model=str(source),
         output_dir=str(work_dir.parent),
@@ -22,7 +33,7 @@ def export_config(source: Path, work_dir: Path) -> ExportableModuleConfig:
         task=ExportTask.IMAGE_TEXT_TO_TEXT,
         prefill_lengths=[128],
         cache_length=4_096,
-        quantization_recipe="dynamic_wi4_afp32",
+        quantization_recipe=quantization_recipe,
         externalize_embedder=True,
         use_jinja_template=True,
         jinja_chat_template_override=str(source / "chat_template.jinja"),
@@ -169,12 +180,21 @@ def main() -> None:
         type=Path,
         default=Path("models/Aquinas-Final-LiteRT/staged"),
     )
+    parser.add_argument(
+        "--quantization-recipe",
+        choices=SUPPORTED_QUANTIZATION_RECIPES,
+        default="dynamic_wi4_afp32",
+    )
     args = parser.parse_args()
     source_path = args.source.resolve()
     work_dir = args.work_dir.resolve()
     work_dir.mkdir(parents=True, exist_ok=True)
 
-    config = export_config(source_path, work_dir)
+    config = export_config(
+        source_path,
+        work_dir,
+        args.quantization_recipe,
+    )
     source, config = load_source(config)
     if args.stage == "decoder":
         run_decoder(source, config)

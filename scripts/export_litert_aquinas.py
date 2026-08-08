@@ -15,6 +15,11 @@ from litert_torch.generative.export_hf.core.exportable_module_config import (
 
 MINIMUM_FREE_BYTES = 40 * 1024**3
 EXPECTED_ARCHITECTURE = "Gemma4ForConditionalGeneration"
+SUPPORTED_QUANTIZATION_RECIPES = (
+    "dynamic_wi4_afp32",
+    "dynamic_wi8_emb4_afp32",
+    "dynamic_wi8_afp32",
+)
 
 
 def validate_source(source: Path, output: Path) -> None:
@@ -70,6 +75,15 @@ def main() -> None:
         type=Path,
         default=Path("models/Aquinas-Final-LiteRT"),
     )
+    parser.add_argument(
+        "--quantization-recipe",
+        choices=SUPPORTED_QUANTIZATION_RECIPES,
+        default="dynamic_wi4_afp32",
+        help=(
+            "Decoder quantization. dynamic_wi8_emb4_afp32 is the higher-precision "
+            "phone candidate: 8-bit fully connected weights with 4-bit embeddings."
+        ),
+    )
     args = parser.parse_args()
 
     source = args.source.resolve()
@@ -82,7 +96,7 @@ def main() -> None:
         task=ExportTask.IMAGE_TEXT_TO_TEXT,
         prefill_lengths=[128],
         cache_length=4_096,
-        quantization_recipe="dynamic_wi4_afp32",
+        quantization_recipe=args.quantization_recipe,
         externalize_embedder=True,
         use_jinja_template=True,
         jinja_chat_template_override=str(source / "chat_template.jinja"),

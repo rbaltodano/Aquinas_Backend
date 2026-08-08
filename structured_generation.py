@@ -6,8 +6,11 @@ import json
 import re
 from dataclasses import dataclass
 from enum import Enum
+from html import escape as xml_escape
 from math import isfinite
 from typing import Callable, Sequence
+
+from grounding_retrieval import GroundingPassage
 
 
 Generator = Callable[..., str]
@@ -20,6 +23,15 @@ CONVERSATION_GENERATION_MAX_TOKENS = 1_800
 COMPACTION_GENERATION_MAX_TOKENS = 1_200
 TREE_ANALYSIS_MAX_TOKENS = 1_000
 DAILY_QUESTION_MAX_TOKENS = 800
+QUOTE_NOTABILITY_MAX_TOKENS = 300
+
+QUOTE_HEURISTIC_MIN_LENGTH = 40
+_QUOTE_FILLER_PHRASES = frozenset(
+    {
+        "ok", "okay", "thanks", "thank you", "got it", "continue", "go on",
+        "sure", "sounds good", "makes sense", "cool", "nice", "great",
+    }
+)
 
 MINIMAL_REPAIR_INSTRUCTION = """
 Repair only the invalid or missing contract surface. Preserve valid substantive content, wording,
@@ -285,6 +297,21 @@ def is_habit_voluntariness_revision(
     ) is not None
 
 
+def is_heuristically_notable(question: str) -> bool:
+    """Cheap, no-model pre-filter for "Your Own Quote" Tier 1: long enough to be
+    an original synthesis, not phrased as a question, not a short filler reply.
+    A True result only flags the message as a Tier-2 candidate -- it does not
+    decide notability by itself."""
+    text = question.strip()
+    if len(text) < QUOTE_HEURISTIC_MIN_LENGTH:
+        return False
+    if text.endswith("?"):
+        return False
+    if text.casefold().strip(" .!") in _QUOTE_FILLER_PHRASES:
+        return False
+    return True
+
+
 @dataclass(frozen=True)
 class ConversationImage:
     name: str
@@ -293,10 +320,32 @@ class ConversationImage:
 
 
 @dataclass(frozen=True)
+class ConversationInsightQuote:
+    title: str
+    definition: str
+
+
+@dataclass(frozen=True)
 class ConversationMessage:
     role: str
     text: str
     images: tuple[ConversationImage, ...] = ()
+    insight_quote: ConversationInsightQuote | None = None
+
+
+def conversation_message_prompt_text(message: ConversationMessage) -> str:
+    """Place a quoted Insight before its question without changing classifier-visible text."""
+    if message.insight_quote is None:
+        return message.text
+    quote = message.insight_quote
+    return (
+        "<insight_quote>\n"
+        f"<title>{xml_escape(quote.title)}</title>\n"
+        f"<definition>{xml_escape(quote.definition)}</definition>\n"
+        "</insight_quote>\n\n"
+        "User question:\n"
+        f"{message.text}"
+    )
 
 
 def conversation_context_and_images(
@@ -319,7 +368,9 @@ def conversation_context_and_images(
 
     lines: list[str] = []
     for message_index, message in enumerate(messages):
-        lines.append(f"{message.role}: {message.text}")
+        lines.append(
+            f"{message.role}: {conversation_message_prompt_text(message)}"
+        )
         for image_index, _ in enumerate(message.images):
             selection = selected.get((message_index, image_index))
             if selection is None:
@@ -388,6 +439,12 @@ class GeneratedDailyQuestion:
 class DailyQuestionInsight:
     title: str
     definition: str
+
+
+@dataclass(frozen=True)
+class GeneratedQuoteNotability:
+    is_notable_insight: bool
+    reason: str | None
 
 
 @dataclass(frozen=True)
@@ -570,6 +627,7 @@ class AquinasGenerationService:
         thinking_enabled: bool = False,
         generation_mode: ConversationGenerationMode = ConversationGenerationMode.DEEP,
         personality: ConversationPersonality = ConversationPersonality.BALANCED,
+        grounding_passages: Sequence[GroundingPassage] = (),
     ) -> StructuredConversationResponse:
         if not recent_messages:
             raise StructuredGenerationError(
@@ -586,6 +644,7 @@ class AquinasGenerationService:
             thinking_enabled=thinking_enabled,
             generation_mode=resolved_mode,
             personality=personality,
+            grounding_passages=grounding_passages,
         )
         selected_generator = (
             self.fast_generator
@@ -668,6 +727,7 @@ class AquinasGenerationService:
         thinking_enabled: bool = False,
         generation_mode: ConversationGenerationMode = ConversationGenerationMode.DEEP,
         personality: ConversationPersonality = ConversationPersonality.BALANCED,
+        grounding_passages: Sequence[GroundingPassage] = (),
     ) -> str:
         if not recent_messages:
             raise StructuredGenerationError(
@@ -679,6 +739,7 @@ class AquinasGenerationService:
             thinking_enabled=thinking_enabled,
             generation_mode=generation_mode,
             personality=personality,
+            grounding_passages=grounding_passages,
         )
 
     @staticmethod
@@ -759,12 +820,28 @@ class AquinasGenerationService:
             )
             return self._parse_daily_question(repaired, allowed_insight_titles)
 
+    def assess_quote_notability(self, quote_text: str) -> GeneratedQuoteNotability:
+        prompt = self._quote_notability_prompt(quote_text)
+        output = self.background_fast_generator(prompt, QUOTE_NOTABILITY_MAX_TOKENS)
+        try:
+            return self._parse_quote_notability(output)
+        except StructuredGenerationError:
+            repaired = self.background_fast_generator(
+                self._quote_notability_repair_prompt(output, quote_text),
+                QUOTE_NOTABILITY_MAX_TOKENS,
+            )
+            return self._parse_quote_notability(repaired)
+
     def analyze_tree_update(
         self,
         question: str,
         response: str,
+        tree_is_empty: bool = False,
     ) -> GeneratedTreeUpdate:
-        if self._is_trivial_tree_turn(question, response):
+        # An empty tree has no seed node yet, so the trivial-turn filter (meant to
+        # avoid cluttering an existing tree with throwaway turns) must not suppress
+        # the very first extraction — there would be nothing left to seed it later.
+        if not tree_is_empty and self._is_trivial_tree_turn(question, response):
             return GeneratedTreeUpdate(
                 subject_label="",
                 subject_summary="",
@@ -955,7 +1032,7 @@ class AquinasGenerationService:
         recent_messages: Sequence[ConversationMessage],
     ) -> str:
         context = "\n".join(
-            f"{message.role}: {message.text}"
+            f"{message.role}: {conversation_message_prompt_text(message)}"
             for message in recent_messages[-12:]
         )
         return f"""
@@ -1000,6 +1077,7 @@ Use this exact shape:
         thinking_enabled: bool = False,
         generation_mode: ConversationGenerationMode = ConversationGenerationMode.DEEP,
         personality: ConversationPersonality = ConversationPersonality.BALANCED,
+        grounding_passages: Sequence[GroundingPassage] = (),
     ) -> str:
         context, images = conversation_context_and_images(recent_messages)
         requires_habit_revision = is_habit_voluntariness_revision(
@@ -1074,6 +1152,35 @@ The numbered attachment labels in the transcript correspond to the images in inp
             if images
             else ""
         )
+        insight_quote_instruction = (
+            """
+An <insight_quote> block immediately before a user question is the Insight the user deliberately
+selected as context. Use its title and definition to resolve references such as "this," "that,"
+or "this idea," while answering the question that follows rather than merely restating the quote.
+""".strip()
+            if any(message.insight_quote is not None for message in recent_messages)
+            else ""
+        )
+        if grounding_passages:
+            passages_text = "\n\n".join(
+                f'[{index}] {passage.title}\n{passage.text}'
+                for index, passage in enumerate(grounding_passages, start=1)
+            )
+            grounding_instruction = f"""
+Reference passages retrieved from primary/historical sources for this question follow below,
+each numbered and labeled with its source title. They were retrieved automatically by semantic
+similarity and may be only loosely relevant, incomplete excerpts, or absent entirely for this
+question — use them only where they actually bear on the question. When a passage materially
+grounds a claim, you may name its source title in prose (for example, "the Summa Theologica
+treats this in..."); do not fabricate a numbered citation marker, page number, or quotation not
+present in the passage. Do not let a retrieved passage override sound reasoning about the
+question itself, and do not force use of a passage that is not actually relevant.
+
+Retrieved passages:
+{passages_text}
+""".strip()
+        else:
+            grounding_instruction = ""
         interface_help_instruction = """
 When the user asks what an Aquinas interface control means, answer from this application glossary.
 Do not mention these controls unless the user asks about them.
@@ -1206,8 +1313,10 @@ Answer the user's latest inquiry using the recent conversation for context.
 {response_instruction}
 {connection_instruction}
 {image_instruction}
+{insight_quote_instruction}
 {revision_instruction}
 {interface_help_instruction}
+{grounding_instruction}
 Never invent a citation, quotation, source location, or attribution. When an exact source is not
 present in the supplied context or reliably known, make the substantive point without a citation
 or qualify the attribution.
@@ -1293,7 +1402,7 @@ array when no term deserves highlighting. insight must be either null or one com
         insights: Sequence[DailyQuestionInsight],
     ) -> str:
         context = "\n".join(
-            f"{message.role}: {message.text}"
+            f"{message.role}: {conversation_message_prompt_text(message)}"
             for message in recent_messages[-12:]
         )
         insight_context = json.dumps(
@@ -1346,7 +1455,7 @@ Return exactly one JSON object with no Markdown or commentary:
         compacted_context: str | None,
     ) -> str:
         context = "\n".join(
-            f"{message.role}: {message.text}"
+            f"{message.role}: {conversation_message_prompt_text(message)}"
             for message in recent_messages[-20:]
         )
         return f"""
@@ -1388,7 +1497,10 @@ Return exactly one JSON object with no Markdown or commentary:
         source = {
             "conversation_title": conversation_title,
             "recent_messages": [
-                {"role": message.role, "text": message.text}
+                {
+                    "role": message.role,
+                    "text": conversation_message_prompt_text(message),
+                }
                 for message in recent_messages[-12:]
             ],
             "allowed_insights": [
@@ -1419,6 +1531,49 @@ Do not copy these schema descriptions into the result.
 """.strip()
 
     @staticmethod
+    def _quote_notability_prompt(quote_text: str) -> str:
+        return f"""
+<TASK:QUOTE_NOTABILITY>
+Decide whether the user's message below reads as an original synthesis, insight, or judgment
+worth resurfacing to the user later -- not a question, not routine acknowledgment, not a request
+for the assistant to do something. Do not rewrite, improve, or paraphrase the message. If notable,
+give one short reason describing what makes it notable; otherwise reason is null.
+Use neutral, clear editorial language independent of any conversational persona.
+
+User message:
+{quote_text}
+
+Return exactly one JSON object with no Markdown or commentary:
+{{
+  "is_notable_insight": false,
+  "reason": null
+}}
+</TASK:QUOTE_NOTABILITY>
+""".strip()
+
+    @staticmethod
+    def _quote_notability_repair_prompt(invalid_output: str, quote_text: str) -> str:
+        return f"""
+<TASK:REPAIR_QUOTE_NOTABILITY>
+Convert the previous output into exactly one valid JSON object with no Markdown or commentary.
+is_notable_insight must be a JSON boolean. reason must be null or a short non-empty string, and
+must be null whenever is_notable_insight is false.
+{MINIMAL_REPAIR_INSTRUCTION}
+
+Original task material:
+{json.dumps({"quote_text": quote_text}, ensure_ascii=False, indent=2)}
+
+Previous output:
+{invalid_output}
+
+Required keys and value types:
+- is_notable_insight: a JSON boolean
+- reason: null, or a short grounded string when is_notable_insight is true
+Do not copy these schema descriptions into the result.
+</TASK:REPAIR_QUOTE_NOTABILITY>
+""".strip()
+
+    @staticmethod
     def _compaction_repair_prompt(
         invalid_output: str,
         recent_messages: Sequence[ConversationMessage],
@@ -1427,7 +1582,10 @@ Do not copy these schema descriptions into the result.
         source = {
             "previous_compacted_checkpoint": compacted_context,
             "turns_since_checkpoint": [
-                {"role": message.role, "text": message.text}
+                {
+                    "role": message.role,
+                    "text": conversation_message_prompt_text(message),
+                }
                 for message in recent_messages[-20:]
             ],
         }
@@ -2455,6 +2613,20 @@ title, context, definition
             question=question,
             rationale=rationale,
             cited_insight_title=cited_title,
+        )
+
+    @classmethod
+    def _parse_quote_notability(cls, output: str) -> GeneratedQuoteNotability:
+        data = cls._extract_json_object(output)
+        is_notable_insight = data.get("is_notable_insight")
+        if not isinstance(is_notable_insight, bool):
+            raise StructuredGenerationError(
+                "is_notable_insight must be a JSON boolean."
+            )
+        reason = cls._clean_string(data.get("reason"), required=False)
+        return GeneratedQuoteNotability(
+            is_notable_insight=is_notable_insight,
+            reason=reason or None if is_notable_insight else None,
         )
 
     @classmethod
