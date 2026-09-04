@@ -94,6 +94,16 @@ def main():
         outputs=[ct.TensorType(name="embedding")],
         convert_to="mlprogram",
         minimum_deployment_target=ct.target.iOS16,
+        # coremltools defaults mlprogram conversion to FP16, whose CPU execution
+        # path for this model is numerically broken: it returns NaN under
+        # ComputeUnit.CPU_ONLY on macOS, and on the iOS Simulator (where
+        # MiniLMEmbedder forces .cpuOnly, because the FP16 MPSGraph path is
+        # device-only) it returns finite but badly wrong vectors -- correct
+        # Summa hits scored ~0.50 against the corpus instead of ~0.84, which
+        # silently degraded every on-device retrieval measurement taken on the
+        # Simulator. FP32 keeps the CPU path correct; MiniLM is only 22M
+        # parameters, so the bundle cost is small.
+        compute_precision=ct.precision.FLOAT32,
     )
     mlmodel.save(str(OUTPUT_PATH))
     print(f"Saved {OUTPUT_PATH}")
@@ -133,6 +143,37 @@ def main():
     print(f"\nWorst-case cosine similarity: {worst_cosine:.6f}")
     if worst_cosine < 0.999:
         raise SystemExit("Conversion fidelity below the 0.999 bar -- do not bundle this model as-is.")
+
+    # The check above exercises whatever compute path Core ML picks by default,
+    # which is why an FP16 export whose CPU path returned NaN/garbage once passed
+    # it and shipped. The Simulator runs CPU-only, so verify that path explicitly.
+    print("\nVerifying the CPU-only compute path (the one the iOS Simulator uses)...")
+    cpu_model = ct.models.MLModel(str(OUTPUT_PATH), compute_units=ct.ComputeUnit.CPU_ONLY)
+    worst_cpu_cosine = 1.0
+    for sentence in test_sentences:
+        encoded = tokenizer(
+            sentence,
+            padding="max_length",
+            truncation=True,
+            max_length=SEQUENCE_LENGTH,
+            return_tensors="pt",
+        )
+        with torch.no_grad():
+            reference = wrapped(encoded["input_ids"], encoded["attention_mask"]).numpy()[0]
+        cpu_output = cpu_model.predict({
+            "input_ids": encoded["input_ids"].numpy().astype(np.int32),
+            "attention_mask": encoded["attention_mask"].numpy().astype(np.int32),
+        })
+        converted = list(cpu_output.values())[0][0]
+        if not np.all(np.isfinite(converted)):
+            raise SystemExit("CPU-only path produced non-finite output -- do not bundle this model.")
+        cosine = float(np.dot(reference, converted) / (np.linalg.norm(reference) * np.linalg.norm(converted)))
+        worst_cpu_cosine = min(worst_cpu_cosine, cosine)
+        print(f"  cpu cosine={cosine:.6f}  {sentence!r}")
+
+    print(f"\nWorst-case CPU-only cosine similarity: {worst_cpu_cosine:.6f}")
+    if worst_cpu_cosine < 0.999:
+        raise SystemExit("CPU-only fidelity below the 0.999 bar -- do not bundle this model as-is.")
     print("PASSED: Core ML export matches the reference model closely enough to bundle.")
 
 
