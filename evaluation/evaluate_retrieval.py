@@ -89,6 +89,13 @@ def parse_book_aliases() -> list[tuple[str, str]]:
     return sorted(pairs, key=lambda p: -len(p[0]))
 
 
+def parse_named_passages() -> list[tuple[str, str, int]]:
+    """Read the named-passage table ("the Beatitudes" -> MAT 5) out of ScriptureCitation.swift."""
+    source = SWIFT_CITATION.read_text()
+    found = re.findall(r'\("([^"]+)",\s*"([A-Z0-9]{3})",\s*(\d+),\s*"[^"]*"\)', source)
+    return [(name, code, int(chapter)) for name, code, chapter in found]
+
+
 def parse_curated() -> list[dict]:
     """Read curated reference entries out of AquinasGrounding.swift."""
     source = SWIFT_CURATED.read_text()
@@ -130,10 +137,13 @@ def index_chapters(passages) -> dict[str, range]:
     return ranges
 
 
-def citations_in(question: str, aliases) -> list[tuple[str, int]]:
+def citations_in(question: str, aliases, named=()) -> list[tuple[str, int]]:
     """Mirror ScriptureCitation.citations(in:)."""
     text = question.lower()
     found, claimed = [], []
+    for name, code, chapter in sorted(named, key=lambda n: -len(n[0])):
+        if name in text and (code, chapter) not in found:
+            found.append((code, chapter))
     for alias, code in aliases:
         for match in re.finditer(re.escape(alias), text):
             start, end = match.span()
@@ -155,7 +165,7 @@ def citations_in(question: str, aliases) -> list[tuple[str, int]]:
 
 
 def retrieve(question, *, embed, passages, embeddings, chapters, book_aliases,
-             curated, limit, floor, corroboration_floor=0.62):
+             named_passages, curated, limit, floor, corroboration_floor=0.62):
     """Mirror MiniLMGroundingProvider.references(for:limit:)."""
     collected: list[dict] = []
 
@@ -169,7 +179,7 @@ def retrieve(question, *, embed, passages, embeddings, chapters, book_aliases,
             collected.append({"layer": "curated", "title": entry["title"], "text": entry["facts"],
                               "score": None})
 
-    for code, chapter in citations_in(question, book_aliases):
+    for code, chapter in citations_in(question, book_aliases, named_passages):
         if len(collected) >= limit:
             break
         for index in chapters.get(f"{code}{chapter}", [])[: limit - len(collected)]:
@@ -211,6 +221,7 @@ def main() -> int:
     embed = load_embedder()
     chapters = index_chapters(passages)
     book_aliases = parse_book_aliases()
+    named_passages = parse_named_passages()
     curated = parse_curated() if args.with_curated else None
 
     print(f"{len(cases)} cases | {len(passages):,} passages | floor {args.floor} "
@@ -219,7 +230,8 @@ def main() -> int:
     results, by_category = [], defaultdict(lambda: {"pass": 0, "total": 0})
     for case in cases:
         refs = retrieve(case["question"], embed=embed, passages=passages, embeddings=embeddings,
-                        chapters=chapters, book_aliases=book_aliases, curated=curated,
+                        chapters=chapters, book_aliases=book_aliases,
+                        named_passages=named_passages, curated=curated,
                         limit=args.limit, floor=args.floor,
                         corroboration_floor=args.corroboration_floor)
         grounded = bool(refs)
