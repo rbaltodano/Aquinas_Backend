@@ -97,6 +97,15 @@ def parse_named_passages() -> list[tuple[str, str, int]]:
     return [(name, code, int(chapter)) for name, code, chapter in found]
 
 
+def parse_named_passage_anchors() -> dict[str, str]:
+    """Read literal named-passage anchors out of ScriptureCitation.swift."""
+    source = SWIFT_CITATION.read_text()
+    block = re.search(r'namedPassageAnchors: \[String: String\] = \[(.*?)\n    \]', source, re.S)
+    if not block:
+        return {}
+    return dict(re.findall(r'"([^"]+)":\s*"([^"]+)"', block.group(1)))
+
+
 def parse_curated() -> list[dict]:
     """Read curated reference entries out of AquinasGrounding.swift."""
     source = SWIFT_CURATED.read_text()
@@ -204,13 +213,14 @@ def index_chapters(passages) -> dict[str, range]:
     return ranges
 
 
-def citations_in(question: str, aliases, named=()) -> list[tuple[str, int]]:
+def citations_in(question: str, aliases, named=(), anchors=None) -> list[tuple[str, int, str | None]]:
     """Mirror ScriptureCitation.citations(in:)."""
     text = question.lower()
     found, claimed = [], []
+    anchors = anchors or {}
     for name, code, chapter in sorted(named, key=lambda n: -len(n[0])):
-        if name in text and (code, chapter) not in found:
-            found.append((code, chapter))
+        if name in text and (code, chapter) not in [(c, ch) for c, ch, _ in found]:
+            found.append((code, chapter, anchors.get(name)))
     for alias, code in aliases:
         for match in re.finditer(re.escape(alias), text):
             start, end = match.span()
@@ -227,12 +237,12 @@ def citations_in(question: str, aliases, named=()) -> list[tuple[str, int]]:
             if not 0 < chapter < 200:
                 continue
             claimed.append((start, end + tail.end()))
-            found.append((code, chapter))
+            found.append((code, chapter, None))
     return found
 
 
 def retrieve(question, *, embed, passages, embeddings, chapters, book_aliases,
-             named_passages, named_sources, authority_sections, curated, limit, floor,
+             named_passages, named_passage_anchors, named_sources, authority_sections, curated, limit, floor,
              corroboration_floor=0.62):
     """Mirror MiniLMGroundingProvider.references(for:limit:)."""
     collected: list[dict] = []
@@ -247,10 +257,21 @@ def retrieve(question, *, embed, passages, embeddings, chapters, book_aliases,
             collected.append({"layer": "curated", "title": entry["title"], "text": entry["facts"],
                               "score": None})
 
-    for code, chapter in citations_in(question, book_aliases, named_passages):
+    for code, chapter, anchor in citations_in(question, book_aliases, named_passages, named_passage_anchors):
         if len(collected) >= limit:
             break
-        for index in chapters.get(f"{code}{chapter}", [])[: limit - len(collected)]:
+        chapter_indices = chapters.get(f"{code}{chapter}", [])
+        if anchor:
+            anchor_index = next(
+                (index for index in chapter_indices if anchor in passages[index]["text"].casefold()),
+                None,
+            )
+            # Mirror the app: a stale source-text pointer returns nothing rather than falling back
+            # to an unrelated opening chunk from the same chapter.
+            if anchor_index is None:
+                continue
+            chapter_indices = range(anchor_index, chapter_indices.stop)
+        for index in chapter_indices[: limit - len(collected)]:
             collected.append({"layer": "citation", "title": passages[index]["title"],
                               "text": passages[index]["text"], "score": None})
 
@@ -352,6 +373,7 @@ def main() -> int:
     chapters = index_chapters(passages)
     book_aliases = parse_book_aliases()
     named_passages = parse_named_passages()
+    named_passage_anchors = parse_named_passage_anchors()
     named_sources = parse_named_sources()
     authority_sections = parse_authority_sections()
     curated = parse_curated() if args.with_curated else None
@@ -363,7 +385,8 @@ def main() -> int:
     for case in cases:
         refs = retrieve(case["question"], embed=embed, passages=passages, embeddings=embeddings,
                         chapters=chapters, book_aliases=book_aliases,
-                        named_passages=named_passages, named_sources=named_sources,
+                        named_passages=named_passages, named_passage_anchors=named_passage_anchors,
+                        named_sources=named_sources,
                         authority_sections=authority_sections, curated=curated,
                         limit=args.limit, floor=args.floor,
                         corroboration_floor=args.corroboration_floor)
