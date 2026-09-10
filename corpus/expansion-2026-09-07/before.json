@@ -1,0 +1,1246 @@
+{
+  "summary": {
+    "passed": 46,
+    "total": 56,
+    "with_curated": false,
+    "floor": 0.55
+  },
+  "by_category": {
+    "scripture": {
+      "pass": 9,
+      "total": 12
+    },
+    "doctrine": {
+      "pass": 12,
+      "total": 12
+    },
+    "sacraments": {
+      "pass": 4,
+      "total": 4
+    },
+    "moral": {
+      "pass": 4,
+      "total": 6
+    },
+    "church-history": {
+      "pass": 4,
+      "total": 7
+    },
+    "creeds": {
+      "pass": 1,
+      "total": 2
+    },
+    "apologetics": {
+      "pass": 5,
+      "total": 6
+    },
+    "out-of-scope": {
+      "pass": 7,
+      "total": 7
+    }
+  },
+  "cases": [
+    {
+      "id": "scripture-ten-commandments",
+      "category": "scripture",
+      "expect": "grounded",
+      "question": "What are the Ten Commandments?",
+      "evidence_any": [
+        "You shall have no other gods",
+        "You shall not murder",
+        "You shall not covet"
+      ],
+      "passed": true,
+      "failure": null,
+      "layers": [
+        "citation",
+        "citation",
+        "citation"
+      ],
+      "top_score": null,
+      "titles": [
+        "World English Bible",
+        "World English Bible",
+        "World English Bible"
+      ]
+    },
+    {
+      "id": "scripture-beatitudes",
+      "category": "scripture",
+      "expect": "grounded",
+      "question": "What are the Beatitudes?",
+      "evidence_any": [
+        "Blessed are the poor in spirit",
+        "Blessed are the meek",
+        "theirs is the Kingdom of Heaven"
+      ],
+      "passed": true,
+      "failure": null,
+      "layers": [
+        "citation",
+        "citation",
+        "citation"
+      ],
+      "top_score": null,
+      "titles": [
+        "World English Bible",
+        "World English Bible",
+        "World English Bible"
+      ]
+    },
+    {
+      "id": "scripture-lords-prayer",
+      "category": "scripture",
+      "expect": "grounded",
+      "question": "How did Jesus teach us to pray?",
+      "evidence_any": [
+        "Our Father in heaven",
+        "Hallowed be your name",
+        "your kingdom come"
+      ],
+      "passed": false,
+      "failure": "wrong-passages",
+      "layers": [
+        "semantic",
+        "semantic",
+        "semantic"
+      ],
+      "top_score": 0.5894249677658081,
+      "titles": [
+        "Summa Theologica",
+        "Summa Theologica",
+        "Summa Theologica"
+      ]
+    },
+    {
+      "id": "scripture-good-samaritan",
+      "category": "scripture",
+      "expect": "grounded",
+      "question": "What is the parable of the Good Samaritan about?",
+      "evidence_any": [
+        "Samaritan",
+        "fell among robbers",
+        "went down from Jerusalem to Jericho"
+      ],
+      "passed": false,
+      "failure": "wrong-passages",
+      "layers": [
+        "citation",
+        "citation",
+        "citation"
+      ],
+      "top_score": null,
+      "titles": [
+        "World English Bible",
+        "World English Bible",
+        "World English Bible"
+      ]
+    },
+    {
+      "id": "scripture-prodigal-son",
+      "category": "scripture",
+      "expect": "grounded",
+      "question": "What happens in the parable of the prodigal son?",
+      "evidence_any": [
+        "prodigal",
+        "younger son",
+        "was dead, and is alive again",
+        "riotous living"
+      ],
+      "passed": true,
+      "failure": null,
+      "layers": [
+        "citation",
+        "citation",
+        "citation"
+      ],
+      "top_score": null,
+      "titles": [
+        "World English Bible",
+        "World English Bible",
+        "World English Bible"
+      ]
+    },
+    {
+      "id": "scripture-creation",
+      "category": "scripture",
+      "expect": "grounded",
+      "question": "How does the Bible describe creation?",
+      "evidence_any": [
+        "In the beginning God created",
+        "Let there be light",
+        "the heavens and the earth"
+      ],
+      "passed": true,
+      "failure": null,
+      "layers": [
+        "semantic",
+        "semantic",
+        "semantic"
+      ],
+      "top_score": 0.6308032274246216,
+      "titles": [
+        "Confessions",
+        "Confessions",
+        "World English Bible"
+      ]
+    },
+    {
+      "id": "scripture-psalm-23-citation",
+      "category": "scripture",
+      "expect": "grounded",
+      "question": "What does Psalm 23 say?",
+      "evidence_any": [
+        "Yahweh is my shepherd",
+        "I shall lack nothing",
+        "green pastures"
+      ],
+      "passed": true,
+      "failure": null,
+      "layers": [
+        "citation",
+        "semantic",
+        "semantic"
+      ],
+      "top_score": 0.6613324284553528,
+      "titles": [
+        "World English Bible",
+        "World English Bible",
+        "World English Bible"
+      ]
+    },
+    {
+      "id": "scripture-romans-8-citation",
+      "category": "scripture",
+      "expect": "grounded",
+      "question": "Explain Romans 8",
+      "evidence_any": [
+        "no condemnation",
+        "Spirit of life",
+        "all things work together for good"
+      ],
+      "passed": true,
+      "failure": null,
+      "layers": [
+        "citation",
+        "citation",
+        "citation"
+      ],
+      "top_score": null,
+      "titles": [
+        "World English Bible",
+        "World English Bible",
+        "World English Bible"
+      ]
+    },
+    {
+      "id": "scripture-1cor13-citation",
+      "category": "scripture",
+      "expect": "grounded",
+      "question": "What does 1 Corinthians 13 teach about love?",
+      "evidence_any": [
+        "Love is patient",
+        "sounding brass",
+        "the greatest of these is love"
+      ],
+      "passed": true,
+      "failure": null,
+      "layers": [
+        "citation",
+        "citation",
+        "semantic"
+      ],
+      "top_score": 0.6269471645355225,
+      "titles": [
+        "World English Bible",
+        "World English Bible",
+        "World English Bible"
+      ]
+    },
+    {
+      "id": "scripture-resurrection",
+      "category": "scripture",
+      "expect": "grounded",
+      "question": "What do the gospels say about the resurrection of Jesus?",
+      "evidence_any": [
+        "He is not here, but is risen",
+        "risen",
+        "the tomb"
+      ],
+      "passed": false,
+      "failure": "wrong-passages",
+      "layers": [
+        "semantic",
+        "semantic",
+        "semantic"
+      ],
+      "top_score": 0.6742039918899536,
+      "titles": [
+        "City of God",
+        "Summa Theologica",
+        "Summa Theologica"
+      ]
+    },
+    {
+      "id": "scripture-loving-enemies",
+      "category": "scripture",
+      "expect": "grounded",
+      "question": "Does the Bible say to love your enemies?",
+      "evidence_any": [
+        "love your enemies",
+        "pray for those who persecute"
+      ],
+      "passed": true,
+      "failure": null,
+      "layers": [
+        "semantic",
+        "semantic",
+        "semantic"
+      ],
+      "top_score": 0.652388334274292,
+      "titles": [
+        "Summa Theologica",
+        "Summa Theologica",
+        "World English Bible"
+      ]
+    },
+    {
+      "id": "scripture-exodus-passover",
+      "category": "scripture",
+      "expect": "grounded",
+      "question": "What was the Passover in Exodus?",
+      "evidence_any": [
+        "Passover",
+        "the blood shall be to you for a token",
+        "unleavened bread"
+      ],
+      "passed": true,
+      "failure": null,
+      "layers": [
+        "citation",
+        "citation",
+        "citation"
+      ],
+      "top_score": null,
+      "titles": [
+        "World English Bible",
+        "World English Bible",
+        "World English Bible"
+      ]
+    },
+    {
+      "id": "doctrine-god-simple",
+      "category": "doctrine",
+      "expect": "grounded",
+      "question": "Is God made of parts?",
+      "evidence_any": [
+        "altogether simple",
+        "nowise composite",
+        "simplicity of God"
+      ],
+      "passed": true,
+      "failure": null,
+      "layers": [
+        "semantic",
+        "semantic",
+        "semantic"
+      ],
+      "top_score": 0.7065032720565796,
+      "titles": [
+        "Summa Theologica",
+        "Summa Theologica",
+        "Summa Theologica"
+      ]
+    },
+    {
+      "id": "doctrine-god-exists",
+      "category": "doctrine",
+      "expect": "grounded",
+      "question": "Can we prove that God exists?",
+      "evidence_any": [
+        "Whether God exists",
+        "demonstrated that God exists",
+        "five ways",
+        "first mover"
+      ],
+      "passed": true,
+      "failure": null,
+      "layers": [
+        "semantic",
+        "semantic",
+        "semantic"
+      ],
+      "top_score": 0.7454004287719727,
+      "titles": [
+        "Summa Theologica",
+        "Summa Theologica",
+        "Summa Theologica"
+      ]
+    },
+    {
+      "id": "doctrine-natural-law",
+      "category": "doctrine",
+      "expect": "grounded",
+      "question": "What is natural law?",
+      "evidence_any": [
+        "natural law",
+        "eternal law",
+        "rational creature"
+      ],
+      "passed": true,
+      "failure": null,
+      "layers": [
+        "semantic",
+        "semantic",
+        "semantic"
+      ],
+      "top_score": 0.6702014207839966,
+      "titles": [
+        "Summa Theologica",
+        "Summa Theologica",
+        "Summa Theologica"
+      ]
+    },
+    {
+      "id": "doctrine-virtue-prudence",
+      "category": "doctrine",
+      "expect": "grounded",
+      "question": "What is the virtue of prudence?",
+      "evidence_any": [
+        "prudence",
+        "right reason applied to action"
+      ],
+      "passed": true,
+      "failure": null,
+      "layers": [
+        "semantic",
+        "semantic",
+        "semantic"
+      ],
+      "top_score": 0.7926092147827148,
+      "titles": [
+        "Summa Theologica",
+        "Summa Theologica",
+        "Summa Theologica"
+      ]
+    },
+    {
+      "id": "doctrine-faith-definition",
+      "category": "doctrine",
+      "expect": "grounded",
+      "question": "What is faith?",
+      "evidence_any": [
+        "faith is the substance of things hoped for",
+        "Whether this is a fitting definition of faith",
+        "habit of the mind"
+      ],
+      "passed": true,
+      "failure": null,
+      "layers": [
+        "semantic",
+        "semantic",
+        "semantic"
+      ],
+      "top_score": 0.7697478532791138,
+      "titles": [
+        "Summa Theologica",
+        "Summa Theologica",
+        "Summa Theologica"
+      ]
+    },
+    {
+      "id": "doctrine-grace",
+      "category": "doctrine",
+      "expect": "grounded",
+      "question": "What is grace?",
+      "evidence_any": [
+        "grace",
+        "gratuitous",
+        "habitual gift"
+      ],
+      "passed": true,
+      "failure": null,
+      "layers": [
+        "semantic",
+        "semantic",
+        "semantic"
+      ],
+      "top_score": 0.701143741607666,
+      "titles": [
+        "Summa Theologica",
+        "Summa Theologica",
+        "Summa Theologica"
+      ]
+    },
+    {
+      "id": "doctrine-soul",
+      "category": "doctrine",
+      "expect": "grounded",
+      "question": "What is the soul?",
+      "evidence_any": [
+        "the soul is a body",
+        "principle of life",
+        "intellectual soul"
+      ],
+      "passed": true,
+      "failure": null,
+      "layers": [
+        "semantic",
+        "semantic",
+        "semantic"
+      ],
+      "top_score": 0.6964686512947083,
+      "titles": [
+        "Summa Theologica",
+        "Summa Theologica",
+        "Summa Theologica"
+      ]
+    },
+    {
+      "id": "doctrine-free-will",
+      "category": "doctrine",
+      "expect": "grounded",
+      "question": "Do humans have free will?",
+      "evidence_any": [
+        "free-will",
+        "free will",
+        "power distinct from the will"
+      ],
+      "passed": true,
+      "failure": null,
+      "layers": [
+        "semantic",
+        "semantic",
+        "semantic"
+      ],
+      "top_score": 0.6680351495742798,
+      "titles": [
+        "Summa Theologica",
+        "Summa Theologica",
+        "Summa Theologica"
+      ]
+    },
+    {
+      "id": "doctrine-problem-of-evil",
+      "category": "doctrine",
+      "expect": "grounded",
+      "question": "Why does God allow evil if He is good?",
+      "evidence_any": [
+        "evil",
+        "privation",
+        "Whether evil is found in things"
+      ],
+      "passed": true,
+      "failure": null,
+      "layers": [
+        "semantic",
+        "semantic",
+        "semantic"
+      ],
+      "top_score": 0.7086399793624878,
+      "titles": [
+        "Summa Theologica",
+        "City of God",
+        "Summa Theologica"
+      ]
+    },
+    {
+      "id": "doctrine-hypostatic-union",
+      "category": "doctrine",
+      "expect": "grounded",
+      "question": "How can Jesus be both God and man?",
+      "evidence_any": [
+        "hypostasis",
+        "human nature in Christ",
+        "union"
+      ],
+      "passed": true,
+      "failure": null,
+      "layers": [
+        "semantic",
+        "semantic",
+        "semantic"
+      ],
+      "top_score": 0.5831335783004761,
+      "titles": [
+        "Summa Theologica",
+        "Summa Theologica",
+        "City of God"
+      ]
+    },
+    {
+      "id": "doctrine-essence-existence",
+      "category": "doctrine",
+      "expect": "grounded",
+      "question": "What is the difference between essence and existence?",
+      "evidence_any": [
+        "essence and existence",
+        "Whether essence and existence are the same in God"
+      ],
+      "passed": true,
+      "failure": null,
+      "layers": [
+        "semantic",
+        "semantic",
+        "semantic"
+      ],
+      "top_score": 0.700055718421936,
+      "titles": [
+        "Summa Theologica",
+        "Summa Theologica",
+        "Summa Theologica"
+      ]
+    },
+    {
+      "id": "doctrine-conscience",
+      "category": "doctrine",
+      "expect": "grounded",
+      "question": "What is conscience?",
+      "evidence_any": [
+        "conscience",
+        "synderesis"
+      ],
+      "passed": true,
+      "failure": null,
+      "layers": [
+        "semantic",
+        "semantic",
+        "semantic"
+      ],
+      "top_score": 0.7383286952972412,
+      "titles": [
+        "Summa Theologica",
+        "Summa Theologica",
+        "Summa Theologica"
+      ]
+    },
+    {
+      "id": "sacrament-eucharist",
+      "category": "sacraments",
+      "expect": "grounded",
+      "question": "What happens at communion?",
+      "evidence_any": [
+        "body of Christ",
+        "bread can be converted",
+        "substance of the bread"
+      ],
+      "passed": true,
+      "failure": null,
+      "layers": [
+        "semantic",
+        "semantic",
+        "semantic"
+      ],
+      "top_score": 0.6743400692939758,
+      "titles": [
+        "Summa Theologica",
+        "Heidelberg Catechism (1563)",
+        "Thirty-Nine Articles (1571)"
+      ]
+    },
+    {
+      "id": "sacrament-baptism",
+      "category": "sacraments",
+      "expect": "grounded",
+      "question": "Why do Christians baptize?",
+      "evidence_any": [
+        "baptism",
+        "baptized",
+        "regeneration"
+      ],
+      "passed": true,
+      "failure": null,
+      "layers": [
+        "semantic",
+        "semantic",
+        "semantic"
+      ],
+      "top_score": 0.6709485054016113,
+      "titles": [
+        "Summa Theologica",
+        "Summa Theologica",
+        "Summa Theologica"
+      ]
+    },
+    {
+      "id": "sacrament-confession",
+      "category": "sacraments",
+      "expect": "grounded",
+      "question": "Why do we confess our sins?",
+      "evidence_any": [
+        "penance",
+        "confession",
+        "contrition",
+        "forgive"
+      ],
+      "passed": true,
+      "failure": null,
+      "layers": [
+        "semantic",
+        "semantic",
+        "semantic"
+      ],
+      "top_score": 0.6777788400650024,
+      "titles": [
+        "Summa Theologica",
+        "Summa Theologica",
+        "Summa Theologica"
+      ]
+    },
+    {
+      "id": "sacrament-marriage",
+      "category": "sacraments",
+      "expect": "grounded",
+      "question": "What does the Church teach about marriage?",
+      "evidence_any": [
+        "matrimony",
+        "marriage",
+        "one flesh"
+      ],
+      "passed": true,
+      "failure": null,
+      "layers": [
+        "semantic",
+        "semantic",
+        "semantic"
+      ],
+      "top_score": 0.6376041769981384,
+      "titles": [
+        "Augsburg Confession (1530)",
+        "Summa Theologica",
+        "Augsburg Confession (1530)"
+      ]
+    },
+    {
+      "id": "moral-lying",
+      "category": "moral",
+      "expect": "grounded",
+      "question": "Is it ever okay to lie?",
+      "evidence_any": [
+        "lying",
+        "a lie",
+        "Whether every lie is a sin"
+      ],
+      "passed": false,
+      "failure": "no-coverage",
+      "layers": [],
+      "top_score": null,
+      "titles": []
+    },
+    {
+      "id": "moral-anger",
+      "category": "moral",
+      "expect": "grounded",
+      "question": "Is it a sin to be angry?",
+      "evidence_any": [
+        "anger",
+        "wrath",
+        "Whether anger"
+      ],
+      "passed": true,
+      "failure": null,
+      "layers": [
+        "semantic",
+        "semantic",
+        "semantic"
+      ],
+      "top_score": 0.7320060729980469,
+      "titles": [
+        "Summa Theologica",
+        "Summa Theologica",
+        "Summa Theologica"
+      ]
+    },
+    {
+      "id": "moral-forgiveness",
+      "category": "moral",
+      "expect": "grounded",
+      "question": "How do I forgive someone who hurt me?",
+      "evidence_any": [
+        "forgive",
+        "mercy",
+        "charity"
+      ],
+      "passed": false,
+      "failure": "no-coverage",
+      "layers": [],
+      "top_score": null,
+      "titles": []
+    },
+    {
+      "id": "moral-pride",
+      "category": "moral",
+      "expect": "grounded",
+      "question": "Why is pride considered the worst sin?",
+      "evidence_any": [
+        "pride",
+        "Whether pride is the most grievous of sins"
+      ],
+      "passed": true,
+      "failure": null,
+      "layers": [
+        "semantic",
+        "semantic",
+        "semantic"
+      ],
+      "top_score": 0.7616634368896484,
+      "titles": [
+        "Summa Theologica",
+        "Summa Theologica",
+        "Summa Theologica"
+      ]
+    },
+    {
+      "id": "moral-despair",
+      "category": "moral",
+      "expect": "grounded",
+      "question": "What does Aquinas say about despair?",
+      "evidence_any": [
+        "despair",
+        "Whether despair is a sin"
+      ],
+      "passed": true,
+      "failure": null,
+      "layers": [
+        "semantic",
+        "semantic",
+        "semantic"
+      ],
+      "top_score": 0.5995175838470459,
+      "titles": [
+        "Summa Theologica",
+        "Summa Theologica",
+        "Summa Theologica"
+      ]
+    },
+    {
+      "id": "moral-friendship",
+      "category": "moral",
+      "expect": "grounded",
+      "question": "What makes a real friendship?",
+      "evidence_any": [
+        "friendship",
+        "friends",
+        "benevolence"
+      ],
+      "passed": true,
+      "failure": null,
+      "layers": [
+        "semantic",
+        "semantic",
+        "semantic"
+      ],
+      "top_score": 0.6915220022201538,
+      "titles": [
+        "Summa Theologica",
+        "Nicomachean Ethics",
+        "Nicomachean Ethics"
+      ]
+    },
+    {
+      "id": "history-nicaea",
+      "category": "church-history",
+      "expect": "grounded",
+      "question": "What did the Council of Nicaea decide about the Son?",
+      "evidence_any": [
+        "consubstantial",
+        "homoousios",
+        "Arian",
+        "begotten, not made"
+      ],
+      "passed": true,
+      "failure": null,
+      "layers": [
+        "semantic",
+        "semantic"
+      ],
+      "top_score": 0.5535398721694946,
+      "titles": [
+        "History of Rome",
+        "The Histories"
+      ]
+    },
+    {
+      "id": "history-constantinople",
+      "category": "church-history",
+      "expect": "grounded",
+      "question": "What was the First Council of Constantinople?",
+      "evidence_any": [
+        "Constantinople",
+        "divinity of the Holy Spirit",
+        "381"
+      ],
+      "passed": true,
+      "failure": null,
+      "layers": [
+        "semantic",
+        "semantic"
+      ],
+      "top_score": 0.5794499516487122,
+      "titles": [
+        "Ecclesiastical History of the English People",
+        "Summa Theologica"
+      ]
+    },
+    {
+      "id": "history-nicaea-ii",
+      "category": "church-history",
+      "expect": "grounded",
+      "question": "Why did the Church defend the use of icons?",
+      "evidence_any": [
+        "icons",
+        "images",
+        "iconoclasm",
+        "veneration"
+      ],
+      "passed": false,
+      "failure": "wrong-passages",
+      "layers": [
+        "semantic"
+      ],
+      "top_score": 0.6022676229476929,
+      "titles": [
+        "Summa Theologica"
+      ]
+    },
+    {
+      "id": "history-chalcedon",
+      "category": "church-history",
+      "expect": "grounded",
+      "question": "What did the Council of Chalcedon teach about Christ's two natures?",
+      "evidence_any": [
+        "Chalcedon",
+        "two natures",
+        "without confusion"
+      ],
+      "passed": true,
+      "failure": null,
+      "layers": [
+        "semantic"
+      ],
+      "top_score": 0.6104728579521179,
+      "titles": [
+        "Summa Theologica"
+      ]
+    },
+    {
+      "id": "history-arius",
+      "category": "church-history",
+      "expect": "grounded",
+      "question": "Who was Arius and what did he teach?",
+      "evidence_any": [
+        "Arius",
+        "Arian",
+        "created"
+      ],
+      "passed": false,
+      "failure": "wrong-passages",
+      "layers": [
+        "semantic",
+        "semantic",
+        "semantic"
+      ],
+      "top_score": 0.5940132141113281,
+      "titles": [
+        "Antiquities of the Jews / The Jewish War",
+        "Antiquities of the Jews / The Jewish War",
+        "The Histories"
+      ]
+    },
+    {
+      "id": "history-apostles-creed",
+      "category": "creeds",
+      "expect": "grounded",
+      "question": "What is the Apostles' Creed?",
+      "evidence_any": [
+        "Apostles' Creed",
+        "I believe in God the Father Almighty",
+        "communion of saints"
+      ],
+      "passed": true,
+      "failure": null,
+      "layers": [
+        "semantic",
+        "semantic",
+        "semantic"
+      ],
+      "top_score": 0.6253582239151001,
+      "titles": [
+        "Thirty-Nine Articles (1571)",
+        "First Apology",
+        "Summa Theologica"
+      ]
+    },
+    {
+      "id": "history-nicene-creed",
+      "category": "creeds",
+      "expect": "grounded",
+      "question": "What does the Nicene Creed say?",
+      "evidence_any": [
+        "Nicene Creed",
+        "begotten, not made",
+        "of one substance with the Father"
+      ],
+      "passed": false,
+      "failure": "no-coverage",
+      "layers": [],
+      "top_score": null,
+      "titles": []
+    },
+    {
+      "id": "history-didache",
+      "category": "church-history",
+      "expect": "grounded",
+      "question": "What is the Didache?",
+      "evidence_any": [
+        "Didache",
+        "Teaching of the Twelve Apostles",
+        "two ways"
+      ],
+      "passed": false,
+      "failure": "no-coverage",
+      "layers": [],
+      "top_score": null,
+      "titles": []
+    },
+    {
+      "id": "history-early-martyrs",
+      "category": "church-history",
+      "expect": "grounded",
+      "question": "What happened to the early Christian martyrs?",
+      "evidence_any": [
+        "martyr",
+        "persecution",
+        "confessed"
+      ],
+      "passed": true,
+      "failure": null,
+      "layers": [
+        "semantic",
+        "semantic",
+        "semantic"
+      ],
+      "top_score": 0.6783048510551453,
+      "titles": [
+        "Summa Theologica",
+        "City of God",
+        "City of God"
+      ]
+    },
+    {
+      "id": "apologetics-trinity",
+      "category": "apologetics",
+      "expect": "grounded",
+      "question": "How can God be three persons and one God?",
+      "evidence_any": [
+        "three persons",
+        "Trinity",
+        "divine persons",
+        "relation"
+      ],
+      "passed": true,
+      "failure": null,
+      "layers": [
+        "semantic",
+        "semantic",
+        "semantic"
+      ],
+      "top_score": 0.7058541774749756,
+      "titles": [
+        "Summa Theologica",
+        "Summa Theologica",
+        "Summa Theologica"
+      ]
+    },
+    {
+      "id": "apologetics-suffering",
+      "category": "apologetics",
+      "expect": "grounded",
+      "question": "If God loves us why do people suffer?",
+      "evidence_any": [
+        "evil",
+        "suffering",
+        "permits"
+      ],
+      "passed": true,
+      "failure": null,
+      "layers": [
+        "semantic",
+        "semantic"
+      ],
+      "top_score": 0.5653355121612549,
+      "titles": [
+        "Summa Theologica",
+        "Summa Theologica"
+      ]
+    },
+    {
+      "id": "apologetics-faith-reason",
+      "category": "apologetics",
+      "expect": "grounded",
+      "question": "Does faith contradict reason?",
+      "evidence_any": [
+        "reason",
+        "natural knowledge",
+        "sacred doctrine"
+      ],
+      "passed": true,
+      "failure": null,
+      "layers": [
+        "semantic",
+        "semantic",
+        "semantic"
+      ],
+      "top_score": 0.6643220782279968,
+      "titles": [
+        "Summa Theologica",
+        "Summa Theologica",
+        "Summa Theologica"
+      ]
+    },
+    {
+      "id": "apologetics-miracles",
+      "category": "apologetics",
+      "expect": "grounded",
+      "question": "Are miracles possible?",
+      "evidence_any": [
+        "miracle",
+        "miracles",
+        "above the order of nature"
+      ],
+      "passed": true,
+      "failure": null,
+      "layers": [
+        "semantic",
+        "semantic",
+        "semantic"
+      ],
+      "top_score": 0.6682536005973816,
+      "titles": [
+        "Summa Theologica",
+        "Summa Theologica",
+        "Summa Theologica"
+      ]
+    },
+    {
+      "id": "apologetics-hell",
+      "category": "apologetics",
+      "expect": "grounded",
+      "question": "How can a loving God send people to hell?",
+      "evidence_any": [
+        "hell",
+        "damned",
+        "punishment"
+      ],
+      "passed": true,
+      "failure": null,
+      "layers": [
+        "semantic"
+      ],
+      "top_score": 0.57431960105896,
+      "titles": [
+        "City of God"
+      ]
+    },
+    {
+      "id": "apologetics-bible-reliability",
+      "category": "apologetics",
+      "expect": "grounded",
+      "question": "Why should I trust the Bible?",
+      "evidence_any": [
+        "Sacred Scripture",
+        "sacred doctrine",
+        "divine revelation"
+      ],
+      "passed": false,
+      "failure": "no-coverage",
+      "layers": [],
+      "top_score": null,
+      "titles": []
+    },
+    {
+      "id": "abstain-sourdough",
+      "category": "out-of-scope",
+      "expect": "abstain",
+      "question": "How do I bake sourdough bread?",
+      "evidence_any": [],
+      "passed": true,
+      "failure": null,
+      "layers": [],
+      "top_score": null,
+      "titles": []
+    },
+    {
+      "id": "abstain-capital-japan",
+      "category": "out-of-scope",
+      "expect": "abstain",
+      "question": "What is the capital of Japan?",
+      "evidence_any": [],
+      "passed": true,
+      "failure": null,
+      "layers": [],
+      "top_score": null,
+      "titles": []
+    },
+    {
+      "id": "abstain-wifi",
+      "category": "out-of-scope",
+      "expect": "abstain",
+      "question": "How do I reset my wifi router?",
+      "evidence_any": [],
+      "passed": true,
+      "failure": null,
+      "layers": [],
+      "top_score": null,
+      "titles": []
+    },
+    {
+      "id": "abstain-current-pope",
+      "category": "out-of-scope",
+      "expect": "abstain",
+      "question": "Who is the current pope?",
+      "evidence_any": [],
+      "passed": true,
+      "failure": null,
+      "layers": [],
+      "top_score": null,
+      "titles": []
+    },
+    {
+      "id": "abstain-vatican-ii",
+      "category": "out-of-scope",
+      "expect": "abstain",
+      "question": "When was the Second Vatican Council?",
+      "evidence_any": [],
+      "passed": true,
+      "failure": null,
+      "layers": [],
+      "top_score": null,
+      "titles": []
+    },
+    {
+      "id": "abstain-mass-times",
+      "category": "out-of-scope",
+      "expect": "abstain",
+      "question": "What time does the church open on Sunday?",
+      "evidence_any": [],
+      "passed": true,
+      "failure": null,
+      "layers": [],
+      "top_score": null,
+      "titles": []
+    },
+    {
+      "id": "abstain-homework",
+      "category": "out-of-scope",
+      "expect": "abstain",
+      "question": "Can you help me with my algebra homework?",
+      "evidence_any": [],
+      "passed": true,
+      "failure": null,
+      "layers": [],
+      "top_score": null,
+      "titles": []
+    }
+  ]
+}

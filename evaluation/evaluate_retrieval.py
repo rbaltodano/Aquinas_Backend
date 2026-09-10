@@ -35,6 +35,7 @@ IOS_ROOT = BACKEND_ROOT.parent / "Aquinas-iOS"
 GROUNDING_DIR = IOS_ROOT / "Aquinas-iOS" / "LocalGrounding"
 SWIFT_CITATION = IOS_ROOT / "Aquinas-iOS" / "Services" / "ScriptureCitation.swift"
 SWIFT_CURATED = IOS_ROOT / "Aquinas-iOS" / "Services" / "AquinasGrounding.swift"
+SWIFT_SOURCE_ROUTING = IOS_ROOT / "Aquinas-iOS" / "Services" / "MiniLMGroundingProvider.swift"
 CASES = Path(__file__).resolve().parent / "retrieval_cases.json"
 
 EMBEDDING_DIM = 384
@@ -114,6 +115,72 @@ def parse_curated() -> list[dict]:
     return entries
 
 
+def parse_named_sources() -> list[tuple[str, set[str]]]:
+    """Read document-name routing aliases from MiniLMGroundingProvider.swift.
+
+    Keeping this table in Swift makes the shipped app the authority. Parsing it here
+    ensures the evaluator measures precisely that behavior instead of a drifting copy.
+    """
+    source = SWIFT_SOURCE_ROUTING.read_text()
+    entries = re.findall(r'\("([^"]+)",\s*\[([^\]]+)\]\)', source)
+    if not entries:
+        raise SystemExit(f"Could not parse named source aliases from {SWIFT_SOURCE_ROUTING}")
+    return [
+        (name, set(re.findall(r'"([^"]+)"', source_ids)))
+        for name, source_ids in entries
+    ]
+
+
+def parse_authority_sections() -> list[tuple[set[str], set[str], set[str]]]:
+    """Read section-level authority pointers from the iOS retrieval provider.
+
+    These are corpus locations, not answer text. Parsing the shipping table here keeps the
+    evaluator aligned with the app whenever a named doctrinal question gains a precise pointer.
+    """
+    source = SWIFT_SOURCE_ROUTING.read_text()
+    entries = re.findall(
+        r'authorityTerms:\s*\[([^\]]+)\],\s*topicTerms:\s*\[([^\]]+)\],\s*sourceIDs:\s*\[([^\]]+)\],\s*sectionTerms:\s*\[([^\]]+)\]',
+        source,
+        re.S,
+    )
+    return [
+        (
+            set(re.findall(r'"([^"]+)"', authority_terms)),
+            set(re.findall(r'"([^"]+)"', topic_terms)),
+            set(re.findall(r'"([^"]+)"', source_ids)),
+            set(re.findall(r'"([^"]+)"', section_terms)),
+        )
+        for authority_terms, topic_terms, source_ids, section_terms in entries
+    ]
+
+
+def named_source_search_terms(question: str, named_sources) -> set[str]:
+    """Mirror NamedCorpusSource.searchTerms(in:) in the iOS provider."""
+    stop_words = {
+        "about", "after", "against", "and", "before", "could", "does", "from", "have", "into",
+        "are", "council", "catechism", "decide", "did", "does", "is", "say", "should", "teach", "that", "the", "their", "these", "they", "this", "was", "what", "when", "who", "why",
+        "where", "which", "with", "would",
+    }
+    terms = {
+        word for word in re.findall(r"[a-z0-9]+", question.casefold())
+        if len(word) >= 3 and word not in stop_words
+    }
+    matching_alias_words = {
+        word
+        for alias, _ in named_sources
+        if alias in question.casefold()
+        for word in re.findall(r"[a-z0-9]+", alias)
+    }
+    topic_terms = terms - matching_alias_words
+    return topic_terms
+
+
+def named_source_ranking_query(question: str, named_sources) -> str:
+    """Mirror NamedCorpusSource.rankingQuery(in:) in the iOS provider."""
+    terms = sorted(named_source_search_terms(question, named_sources))
+    return " ".join(terms) or question
+
+
 def index_chapters(passages) -> dict[str, range]:
     """Mirror OnDeviceGroundingStore.indexChapters."""
     tag = re.compile(r"^\s*\[([A-Z0-9]{3,8})\]")
@@ -165,7 +232,8 @@ def citations_in(question: str, aliases, named=()) -> list[tuple[str, int]]:
 
 
 def retrieve(question, *, embed, passages, embeddings, chapters, book_aliases,
-             named_passages, curated, limit, floor, corroboration_floor=0.62):
+             named_passages, named_sources, authority_sections, curated, limit, floor,
+             corroboration_floor=0.62):
     """Mirror MiniLMGroundingProvider.references(for:limit:)."""
     collected: list[dict] = []
 
@@ -186,6 +254,66 @@ def retrieve(question, *, embed, passages, embeddings, chapters, book_aliases,
             collected.append({"layer": "citation", "title": passages[index]["title"],
                               "text": passages[index]["text"], "score": None})
 
+    # A section pointer identifies the primary-source passage by its own heading or formula. It
+    # is a metadata lookup, comparable to a Bible chapter citation, not a generated answer.
+    question_folded = question.casefold()
+    question_words = set(re.findall(r"[a-z0-9]+", question_folded))
+    if len(collected) < limit:
+        for authority_terms, topic_terms, source_ids, section_terms in authority_sections:
+            if not authority_terms.issubset(question_words) or topic_terms.isdisjoint(question_words):
+                continue
+            for index, passage in enumerate(passages):
+                text = passage["text"].casefold()
+                if (passage["sourceId"] in source_ids
+                        and all(term in text for term in section_terms)):
+                    # Mirror OnDeviceGroundingStore.section: a pointer anchors a source-local
+                    # run so the prompt contains the explanation following a short heading.
+                    source_id = passage["sourceId"]
+                    for section_index in range(index, len(passages)):
+                        section_passage = passages[section_index]
+                        if section_passage["sourceId"] != source_id or len(collected) >= limit:
+                            break
+                        collected.append({"layer": "authority-section", "title": section_passage["title"],
+                                          "text": section_passage["text"], "score": None})
+                    break
+            if len(collected) >= limit:
+                break
+
+    # A named council, creed, or work title identifies a document rather than a broad
+    # historical topic. Mirror the app by ranking within that actual source first.
+    # This adds only exported corpus passages; it never supplies a written answer.
+    if len(collected) < limit:
+        source_ids = {
+            source_id
+            for alias, source_set in named_sources
+            if alias in question_folded
+            for source_id in source_set
+        }
+        if source_ids:
+            similarities = embeddings @ embed(named_source_ranking_query(question, named_sources))
+            prioritizing_terms = named_source_search_terms(question, named_sources)
+            candidate_indices = [
+                index for index, passage in enumerate(passages)
+                if passage["sourceId"] in source_ids
+                and (
+                    similarities[index] >= floor
+                    or any(term in passage["text"].casefold() for term in prioritizing_terms)
+                )
+            ]
+            def source_rank(index):
+                text = passages[index]["text"].casefold()
+                matched_terms = sum(term in text for term in prioritizing_terms)
+                return (-matched_terms, -similarities[index])
+
+            for index in sorted(candidate_indices, key=source_rank):
+                if len(collected) >= limit:
+                    break
+                if any(reference["text"] == passages[index]["text"] for reference in collected):
+                    continue
+                collected.append({"layer": "source", "title": passages[index]["title"],
+                                  "text": passages[index]["text"],
+                                  "score": float(similarities[index])})
+
     if len(collected) < limit:
         # Mirror the tiered floor in MiniLMGroundingProvider: a semantic passage standing on its
         # own only needs the standard floor, but one merely padding an already-authoritative
@@ -195,6 +323,8 @@ def retrieve(question, *, embed, passages, embeddings, chapters, book_aliases,
         for index in np.argsort(-similarities)[: limit - len(collected)]:
             if similarities[index] < effective_floor:
                 break
+            if any(reference["text"] == passages[index]["text"] for reference in collected):
+                continue
             collected.append({"layer": "semantic", "title": passages[index]["title"],
                               "text": passages[index]["text"],
                               "score": float(similarities[index])})
@@ -222,6 +352,8 @@ def main() -> int:
     chapters = index_chapters(passages)
     book_aliases = parse_book_aliases()
     named_passages = parse_named_passages()
+    named_sources = parse_named_sources()
+    authority_sections = parse_authority_sections()
     curated = parse_curated() if args.with_curated else None
 
     print(f"{len(cases)} cases | {len(passages):,} passages | floor {args.floor} "
@@ -231,7 +363,8 @@ def main() -> int:
     for case in cases:
         refs = retrieve(case["question"], embed=embed, passages=passages, embeddings=embeddings,
                         chapters=chapters, book_aliases=book_aliases,
-                        named_passages=named_passages, curated=curated,
+                        named_passages=named_passages, named_sources=named_sources,
+                        authority_sections=authority_sections, curated=curated,
                         limit=args.limit, floor=args.floor,
                         corroboration_floor=args.corroboration_floor)
         grounded = bool(refs)

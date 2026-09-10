@@ -1,0 +1,51 @@
+{
+  "sources": {
+    "seven-ecumenical-councils": {
+      "char_count": 2323523,
+      "retrieved_at": "2026-09-07T21:07:45.273707+00:00",
+      "sha256": "ac088e1bf8ab48ec3bb077f666a4779f71f15ced8478ff61d5cd1bd788045906",
+      "source_url": "https://www.ccel.org/ccel/s/schaff/npnf214/cache/npnf214.txt",
+      "title": "The Seven Ecumenical Councils (Percival, 1900; texts and historical notes)"
+    },
+    "ecumenical-creeds-schaff": {
+      "char_count": 85220,
+      "retrieved_at": "2026-09-07T21:07:56.604468+00:00",
+      "sha256": "b3f1ab954b6c171a8f2fba27594a741e218401b5b56dc0605d62223f88c36be4",
+      "source_url": "https://www.ccel.org/ccel/s/schaff/creeds2/cache/creeds2.txt",
+      "title": "Ecumenical Creeds (Schaff, Creeds of Christendom II)"
+    },
+    "baltimore-catechism-3": {
+      "char_count": 402305,
+      "retrieved_at": "2026-09-07T21:07:57.307390+00:00",
+      "sha256": "85a0d98cdde1d6196c311edae6c18399942b2cdfea1c42ec6932f76a8ec4649f",
+      "source_url": "https://www.gutenberg.org/cache/epub/14553/pg14553.txt",
+      "title": "Baltimore Catechism No. 3 (1921 historical edition)"
+    }
+  },
+  "bundled_assets": {
+    "MiniLM.mlpackage/Data/com.apple.CoreML/model.mlmodel": {
+      "bytes": 65945,
+      "sha256": "60b059a7762cd37aa1ce57102740beca6e6f9796805134f94fb028249348582a"
+    },
+    "MiniLM.mlpackage/Data/com.apple.CoreML/weights/weight.bin": {
+      "bytes": 89871744,
+      "sha256": "2761ce1e94d0146e207a4f8802b8f15c8744bdaf5e81e8bc71775cc163d06d0f"
+    },
+    "MiniLM.mlpackage/Manifest.json": {
+      "bytes": 617,
+      "sha256": "5776eba4be12e8623083300f8343e66e23f45216abbe4c2102a052efed272e69"
+    },
+    "embeddings.bin": {
+      "bytes": 77234688,
+      "sha256": "90e4f0b1ed84579313bc08c76d3deda62aee0bc5a9a936df4a225b8cc26594fa"
+    },
+    "passages.json": {
+      "bytes": 53897278,
+      "sha256": "33b9c603276a2bf817cf721188d68e92910d7032b0f633ca1f4ae113e30f3ae4"
+    },
+    "vocab.txt": {
+      "bytes": 231508,
+      "sha256": "07eced375cec144d27c900241f3e339478dec958f92fddbc551f295c992038a3"
+    }
+  }
+}

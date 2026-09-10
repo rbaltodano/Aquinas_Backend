@@ -8,10 +8,81 @@
 #   pending_verification - candidate text/translation not yet checked; starred
 #                          entries are waiting on a specific edition to be chosen
 #
-# Each entry's `url` is a placeholder for the eventual download source and is
-# not fetched by anything yet.
+# URLs are consumed by ingest_corpus.py; edition-specific plain-text boundaries
+# exclude modern distributor material and fail closed if the download changes.
 
 sources:
+  - id: seven-ecumenical-councils
+    title: "The Seven Ecumenical Councils (Percival, 1900; texts and historical notes)"
+    category: conciliar
+    translation: "Henry R. Percival, NPNF second series, volume XIV (1900)"
+    license_status: confirmed_pd
+    license_url: https://www.ccel.org/ccel/s/schaff/npnf214/cache/npnf214.txt
+    notes: >
+      CCEL's edition metadata explicitly states Rights: Public Domain.
+      Original 1900 English translations and historical editorial notes are
+      public domain in the USA. Includes the seven councils' creeds, canons,
+      decrees and letters, plus local synods and historical commentary;
+      commentary is not itself a conciliar decree. Only historical book text
+      is ingested, excluding CCEL metadata, generated indexes and website material.
+    url: https://www.ccel.org/ccel/s/schaff/npnf214/cache/npnf214.txt
+    format: plain_text
+    text_start: '^\s*General Introduction\.$'
+    text_end: '^\s*Indexes\s*$'
+    strip_link_numbers: true
+
+  - id: ecumenical-creeds-schaff
+    title: "Ecumenical Creeds (Schaff, Creeds of Christendom II)"
+    category: creed
+    translation: "Philip Schaff, sixth edition; copyright 1877, 1905, 1919"
+    license_status: confirmed_pd
+    license_url: https://ccel.org/ccel/schaff/creeds2/creeds2.i.html
+    notes: >
+      CCEL identifies the sixth edition as public domain; its title page
+      records copyrights through 1919, all expired in the USA. Ingest only
+      the Oecumenical Symbols section: Apostles', Nicene, Constantinopolitan,
+      Chalcedonian and Athanasian formulas, with original-language parallels
+      and historical notes. Excludes modern CCEL material and later sections.
+    url: https://www.ccel.org/ccel/s/schaff/creeds2/cache/creeds2.txt
+    format: plain_text
+    text_start: '^\s*OECUMENICAL SYMBOLS\s*$'
+    text_end: '^SYMBOLA ROMANA\.$'
+    strip_link_numbers: true
+
+  - id: baltimore-catechism-3
+    title: "Baltimore Catechism No. 3 (1921 historical edition)"
+    category: catechism
+    translation: "Original English; supplemented by Thomas L. Kinkead"
+    license_status: confirmed_pd
+    license_url: https://www.gutenberg.org/ebooks/14553
+    notes: >
+      Project Gutenberg ebook 14553 explicitly identifies this text as public
+      domain in the USA; the edition carries a June 29, 1921 imprimatur.
+      Historical Catholic catechism, including historical disciplinary rules;
+      not the contemporary Catechism of the Catholic Church. Distributor
+      headers, license footer and modern transcriber annotations are excluded.
+    url: https://www.gutenberg.org/cache/epub/14553/pg14553.txt
+    format: plain_text
+    text_start: '^Catechism of Christian Doctrine$'
+    text_end: '^\*\*\* END OF THE PROJECT GUTENBERG EBOOK'
+
+  - id: roman-catechism-donovan
+    title: "Catechism of the Council of Trent (Donovan, 1829)"
+    category: catechism
+    translation: "Jeremiah Donovan, 1829 English translation"
+    license_status: confirmed_pd
+    license_url: https://archive.org/details/thecatechismofth00donouoft
+    notes: >
+      The 1829 Donovan English translation was published in Baltimore and is
+      public domain in the USA. It is the Roman Catechism commissioned after
+      Trent for pastors, covering the Creed, sacraments, commandments and
+      Lord's Prayer. The extractor retains only the catechism itself, excluding
+      front matter, translator's preface, scan artifacts and the general index.
+    url: https://archive.org/download/thecatechismofth00donouoft/thecatechismofth00donouoft_djvu.txt
+    format: plain_text
+    text_start: 'THE\s+CATECHISM\s+OF\s+THE\s+COUNCIL\s+OF\s+TRENT\s+PART\s+I\.'
+    text_end: '^\s*THE\s+END\.\s*$'
+
   - id: summa-theologica
     title: Summa Theologica
     category: theology
@@ -325,12 +396,19 @@ sources:
     category: history
     translation: J. Waterworth (1848)
     license_status: confirmed_pd
+    license_url: https://archive.org/details/TheCanonsAndDecrees
     notes: >
       Extends existing council coverage into the Counter-Reformation, pairs
-      with the Protestant confessions above. fordham.edu returned HTTP 500
-      on the last ingestion attempt (site-side, not a manifest issue) —
-      retry later rather than assuming it's permanently unavailable.
-    url: https://sourcebooks.fordham.edu/basis/trent.asp
+      with the Protestant confessions above. The J. Waterworth English edition
+      was published in London in 1848 and is public domain in the USA. Fetch
+      the Internet Archive OCR of that specific edition, selecting only the
+      council's primary documents: its Bull of Indiction through the text
+      immediately before the index. This deliberately excludes Waterworth's
+      historical essays and the scan distributor material.
+    url: https://archive.org/download/TheCanonsAndDecrees/TheCanonsAndDecrees_djvu.txt
+    format: plain_text
+    text_start: '^\s*THE\s*$\n\s*CANONS\s+AND\s+DECREES\s*$\n\s*OF\s+THB\s*$'
+    text_end: '^\s*INDEX\s*$'
 
   - id: thucydides-peloponnesian-war
     title: History of the Peloponnesian War

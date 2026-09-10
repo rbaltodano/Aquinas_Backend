@@ -417,6 +417,28 @@
     ]
   },
   {
+    "id": "history-nicaea-christ-metadata",
+    "category": "church-history",
+    "expect": "grounded",
+    "question": "How did Nicaea describe Christ's relationship to the Father?",
+    "evidence_any": [
+      "very god of very god",
+      "begotten, not made",
+      "of the substance of the father"
+    ]
+  },
+  {
+    "id": "history-chalcedon-christ-metadata",
+    "category": "church-history",
+    "expect": "grounded",
+    "question": "How did Chalcedon describe Christ?",
+    "evidence_any": [
+      "in two natures",
+      "one and the same",
+      "without confusion"
+    ]
+  },
+  {
     "id": "history-arius",
     "category": "church-history",
     "expect": "grounded",
@@ -458,6 +480,79 @@
       "Didache",
       "Teaching of the Twelve Apostles",
       "two ways"
+    ]
+  },
+  {
+    "id": "history-trent-justification",
+    "category": "church-history",
+    "expect": "grounded",
+  "question": "What did the Council of Trent teach about justification?",
+  "evidence_any": [
+    "not remission of sins merely",
+    "the alone formal cause is the justice of god",
+    "without any merits existing on their parts"
+  ]
+  },
+  {
+    "id": "trent-real-presence-metadata",
+    "category": "sacraments",
+    "expect": "grounded",
+    "question": "What did the Council of Trent teach about the real presence?",
+    "evidence_any": [
+      "on the real presence of our lord",
+      "most holy sacrament of the eucharist"
+    ]
+  },
+  {
+    "id": "trent-confession-metadata",
+    "category": "sacraments",
+    "expect": "grounded",
+    "question": "How did Trent understand confession and penance?",
+    "evidence_any": [
+      "doctrine on the sacrament of penance",
+      "another sacrament, besides that of baptism"
+    ]
+  },
+  {
+    "id": "catechism-roman-catechism",
+    "category": "catechism",
+    "expect": "grounded",
+    "question": "What is the Roman Catechism?",
+    "evidence_any": [
+      "catechism of the council of trent",
+      "the council of trent",
+      "pastors"
+    ]
+  },
+  {
+    "id": "roman-catechism-baptism-metadata",
+    "category": "catechism",
+    "expect": "grounded",
+    "question": "How does the Roman Catechism define Baptism?",
+    "evidence_any": [
+      "consists of ablution",
+      "certain solemn words",
+      "natural water"
+    ]
+  },
+  {
+    "id": "roman-catechism-eucharist-metadata",
+    "category": "catechism",
+    "expect": "grounded",
+    "question": "What does the Roman Catechism teach about the Eucharist?",
+    "evidence_any": [
+      "sacred mysteries bequeathed to us by our lord",
+      "body of the lord"
+    ]
+  },
+  {
+    "id": "roman-catechism-penance-metadata",
+    "category": "catechism",
+    "expect": "grounded",
+    "question": "What does the Roman Catechism teach about penance?",
+    "evidence_any": [
+      "necessity of the sacrament of penance",
+      "second plank"
     ]
   },
   {
