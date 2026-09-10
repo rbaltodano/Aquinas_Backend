@@ -245,10 +245,22 @@ def citations_in(question: str, aliases, named=(), anchors=None) -> list[tuple[s
     return found
 
 
+def outside_corpus_scope(question: str) -> bool:
+    """Mirror CorpusScope.excludes in the shipped iOS provider."""
+    normalized = question.casefold()
+    words = set(re.findall(r"[a-z0-9]+", normalized))
+    return (("current" in words and "pope" in words)
+            or "vatican ii" in normalized
+            or "vatican 2" in normalized
+            or "second vatican council" in normalized)
+
+
 def retrieve(question, *, embed, passages, embeddings, chapters, book_aliases,
              named_passages, named_passage_anchors, named_sources, authority_sections, curated, limit, floor,
              corroboration_floor=0.62):
     """Mirror MiniLMGroundingProvider.references(for:limit:)."""
+    if outside_corpus_scope(question):
+        return []
     collected: list[dict] = []
 
     if curated is not None:
