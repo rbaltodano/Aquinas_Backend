@@ -181,7 +181,11 @@ def named_source_search_terms(question: str, named_sources) -> set[str]:
         for word in re.findall(r"[a-z0-9]+", alias)
     }
     topic_terms = terms - matching_alias_words
-    return topic_terms
+    # Mirror NamedCorpusSource.personAliases. A person's name can be the whole lookup term, while
+    # a document title should preserve semantic source ranking to avoid front matter winning.
+    matches_person_alias = any(alias == "arius" and alias in question.casefold()
+                               for alias, _ in named_sources)
+    return terms if not topic_terms and matches_person_alias else topic_terms
 
 
 def named_source_ranking_query(question: str, named_sources) -> str:
