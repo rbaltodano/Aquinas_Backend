@@ -163,6 +163,22 @@ def parse_authority_sections() -> list[tuple[set[str], set[str], set[str]]]:
     ]
 
 
+def parse_subject_sections() -> list[tuple[set[str], set[str], set[str]]]:
+    """Read moral-subject source pointers from the iOS provider."""
+    source = SWIFT_SOURCE_ROUTING.read_text()
+    entries = re.findall(
+        r'questionTerms:\s*\[([^\]]+)\],\s*sourceIDs:\s*\[([^\]]+)\],\s*sectionTerms:\s*\[([^\]]+)\]',
+        source,
+        re.S,
+    )
+    return [
+        (set(re.findall(r'"([^"]+)"', question_terms)),
+         set(re.findall(r'"([^"]+)"', source_ids)),
+         set(re.findall(r'"([^"]+)"', section_terms)))
+        for question_terms, source_ids, section_terms in entries
+    ]
+
+
 def named_source_search_terms(question: str, named_sources) -> set[str]:
     """Mirror NamedCorpusSource.searchTerms(in:) in the iOS provider."""
     stop_words = {
@@ -257,7 +273,7 @@ def outside_corpus_scope(question: str) -> bool:
 
 def retrieve(question, *, embed, passages, embeddings, chapters, book_aliases,
              named_passages, named_passage_anchors, named_sources, authority_sections, curated, limit, floor,
-             corroboration_floor=0.62):
+             subject_sections=(), corroboration_floor=0.62):
     """Mirror MiniLMGroundingProvider.references(for:limit:)."""
     if outside_corpus_scope(question):
         return []
@@ -316,6 +332,24 @@ def retrieve(question, *, embed, passages, embeddings, chapters, book_aliases,
             if len(collected) >= limit:
                 break
 
+    if len(collected) < limit:
+        for question_terms, source_ids, section_terms in subject_sections:
+            if question_terms.isdisjoint(question_words):
+                continue
+            for index, passage in enumerate(passages):
+                text = passage["text"].casefold()
+                if passage["sourceId"] in source_ids and all(term in text for term in section_terms):
+                    source_id = passage["sourceId"]
+                    for section_index in range(index, len(passages)):
+                        section_passage = passages[section_index]
+                        if section_passage["sourceId"] != source_id or len(collected) >= limit:
+                            break
+                        collected.append({"layer": "subject-section", "title": section_passage["title"],
+                                          "text": section_passage["text"], "score": None})
+                    break
+            if len(collected) >= limit:
+                break
+
     # A named council, creed, or work title identifies a document rather than a broad
     # historical topic. Mirror the app by ranking within that actual source first.
     # This adds only exported corpus passages; it never supplies a written answer.
@@ -334,6 +368,7 @@ def retrieve(question, *, embed, passages, embeddings, chapters, book_aliases,
                 if passage["sourceId"] in source_ids
                 and (
                     similarities[index] >= floor
+                    or not prioritizing_terms
                     or any(term in passage["text"].casefold() for term in prioritizing_terms)
                 )
             ]
@@ -392,6 +427,7 @@ def main() -> int:
     named_passage_anchors = parse_named_passage_anchors()
     named_sources = parse_named_sources()
     authority_sections = parse_authority_sections()
+    subject_sections = parse_subject_sections()
     curated = parse_curated() if args.with_curated else None
 
     print(f"{len(cases)} cases | {len(passages):,} passages | floor {args.floor} "
@@ -404,6 +440,7 @@ def main() -> int:
                         named_passages=named_passages, named_passage_anchors=named_passage_anchors,
                         named_sources=named_sources,
                         authority_sections=authority_sections, curated=curated,
+                        subject_sections=subject_sections,
                         limit=args.limit, floor=args.floor,
                         corroboration_floor=args.corroboration_floor)
         grounded = bool(refs)
