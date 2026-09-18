@@ -84,16 +84,25 @@ def main() -> None:
             "phone candidate: 8-bit fully connected weights with 4-bit embeddings."
         ),
     )
+    parser.add_argument(
+        "--skip-vision",
+        action="store_true",
+        help=(
+            "Skip exporting the vision tower/adapter. On-device multimodal input "
+            "is post-launch; the vision_adapter compile step is also the single "
+            "largest memory/disk consumer in the export. Produces a text-only "
+            "package."
+        ),
+    )
     args = parser.parse_args()
 
     source = args.source.resolve()
     output = args.output.resolve()
     validate_source(source, output)
 
-    export.export(
+    export_kwargs = dict(
         model=str(source),
         output_dir=str(output),
-        task=ExportTask.IMAGE_TEXT_TO_TEXT,
         prefill_lengths=[128],
         cache_length=4_096,
         quantization_recipe=args.quantization_recipe,
@@ -101,10 +110,22 @@ def main() -> None:
         use_jinja_template=True,
         jinja_chat_template_override=str(source / "chat_template.jinja"),
         bundle_litert_lm=True,
-        export_vision_encoder=True,
-        vision_encoder_quantization_recipe="dynamic_wi8_afp32",
         experimental_lightweight_conversion=True,
     )
+
+    if args.skip_vision:
+        export_kwargs.update(
+            task=ExportTask.TEXT_GENERATION,
+            export_vision_encoder=False,
+        )
+    else:
+        export_kwargs.update(
+            task=ExportTask.IMAGE_TEXT_TO_TEXT,
+            export_vision_encoder=True,
+            vision_encoder_quantization_recipe="dynamic_wi8_afp32",
+        )
+
+    export.export(**export_kwargs)
 
 
 if __name__ == "__main__":

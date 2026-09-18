@@ -257,6 +257,26 @@ def fetch_local_file(local_path: str) -> FetchResult:
     return FetchResult(text=text, source_url=f"file://{path}")
 
 
+def extract_plain_text(text: str, source: dict) -> str:
+    """Select an edition's text, failing closed if its documented boundaries change."""
+    text = text.replace("\r\n", "\n")
+    start = re.search(source["text_start"], text, re.MULTILINE)
+    if start is None:
+        raise ValueError(f"Missing text_start for {source['id']}")
+    text = text[start.start():]
+    end = re.search(source["text_end"], text, re.MULTILINE)
+    if end is None:
+        raise ValueError(f"Missing text_end for {source['id']}")
+    text = text[:end.start()]
+    # Exported hyperlink numbers and horizontal rules are not printed prose.
+    if source.get("strip_link_numbers"):
+        text = re.sub(r"\[\d+\]", "", text)
+    text = re.sub(r"(?m)^\s*[_-]{5,}\s*$", "\n", text)
+    # Gutenberg's modern transcriber annotations are explicitly delimited.
+    text = re.sub(r"\{(?:Transcriber's Note|T\.N\.):.*?\}", "", text, flags=re.S)
+    return text.strip()
+
+
 def fetch_source(source: dict) -> FetchResult:
     local_path = source.get("local_path")
     if local_path:
@@ -265,6 +285,10 @@ def fetch_source(source: dict) -> FetchResult:
     url = source.get("url")
     if not url:
         raise RuntimeError(f"Source {source['id']!r} has no url or local_path to fetch.")
+
+    if source.get("format") == "plain_text":
+        text = _http_get(url).decode("utf-8-sig")
+        return FetchResult(text=extract_plain_text(text, source), source_url=url)
 
     if "ebible.org" in url:
         return fetch_ebible_web(url)

@@ -541,8 +541,12 @@ class AquinasGenerationServiceTests(unittest.TestCase):
             prompt,
         )
         self.assertNotIn("250 words", prompt)
-        self.assertIn("warm and seasoned guide", prompt)
-        self.assertIn("lean into intentional dialogue", prompt)
+        self.assertIn("intellectual depth and habits of Aquinas", prompt)
+        self.assertIn("scholarly in substance and casually articulate", prompt)
+        self.assertIn('inclusive "we,"', prompt)
+        self.assertIn("A little gentle humor", prompt)
+        self.assertIn("companionable final thought", prompt)
+        self.assertIn("Identify no more than 6 key terms", prompt)
 
     def test_tree_analysis_uses_background_generator(self) -> None:
         foreground_generator = RecordingGenerator([])
@@ -1221,7 +1225,12 @@ class AquinasGenerationServiceTests(unittest.TestCase):
         )
 
         prompt = service.conversation_prompt(
-            [ConversationMessage(role="user", text="Explain the structure.")]
+            [
+                ConversationMessage(
+                    role="user",
+                    text="Explain act, potency, intellect, will, and voluntariness.",
+                )
+            ]
         )
 
         self.assertIn('H1 on its own line with "# "', prompt)
@@ -1231,13 +1240,15 @@ class AquinasGenerationServiceTests(unittest.TestCase):
         self.assertIn("line break as \\n inside the JSON string", prompt)
         self.assertIn("set insight to a complete object", prompt)
         self.assertIn('"insight": null', prompt)
-        self.assertIn("Intellectually foundational concepts or subjects", prompt)
-        self.assertIn("prerequisite knowledge", prompt)
-        self.assertIn("There is no highlighting quota", prompt)
-        self.assertIn("never introduce jargon", prompt)
-        self.assertIn("Discovery concepts", prompt)
-        self.assertIn("intellectual", prompt)
-        self.assertIn("rabbit hole", prompt)
+        self.assertIn("editorial frequency of useful links in a good Wikipedia article", prompt)
+        self.assertIn("first meaningful occurrence", prompt)
+        self.assertIn("important concepts, subjects, people, works, doctrines", prompt)
+        self.assertIn("short substantive answer will often have 2-4", prompt)
+        self.assertIn("multi-paragraph answer will often have 5-8", prompt)
+        self.assertIn("Do not return an empty key_terms array for a substantive", prompt)
+        self.assertIn("Important named subjects are valid key terms", prompt)
+        self.assertIn("scan each paragraph", prompt)
+        self.assertIn("Do not stop at the minimum", prompt)
         self.assertIn("Never invent a citation", prompt)
         self.assertIn("level of explanation the user actually requested", prompt)
         self.assertIn("Do not add divine, theological, or devotional framing", prompt)
@@ -1257,11 +1268,10 @@ class AquinasGenerationServiceTests(unittest.TestCase):
         self.assertIn("The intended end is a final cause", prompt)
         self.assertIn("Voluntariness in cause", prompt)
         self.assertIn("equally or automatically voluntary", prompt)
-        self.assertIn("adjacent concept naturally contributes", prompt)
-        self.assertIn("do not manufacture jargon", prompt)
+        self.assertIn("worthwhile\nadjacent subjects", prompt)
+        self.assertIn("never introduce jargon merely", prompt)
         self.assertIn("Treat alternate wording and close synonyms as one concept", prompt)
-        self.assertIn("both act and actuality", prompt)
-        self.assertIn("broad topic word", prompt)
+        self.assertIn("same concept twice", prompt)
 
     def test_direct_definition_prompt_displays_required_insight_shape(self) -> None:
         service = AquinasGenerationService(RecordingGenerator([]))
@@ -1275,7 +1285,7 @@ class AquinasGenerationServiceTests(unittest.TestCase):
         self.assertIn('"title": "prudence"', prompt)
         self.assertIn('"definition": "A concise contextual definition."', prompt)
         self.assertNotIn('"insight": null', prompt)
-        self.assertIn("not novelty alone", prompt)
+        self.assertIn("good Wikipedia article", prompt)
         self.assertIn("immediate conversation or passage's specific sense", prompt)
         self.assertIn("Prefer one precise", prompt)
         self.assertIn("distinction over a list of loose synonyms", prompt)
@@ -1359,6 +1369,26 @@ class AquinasGenerationServiceTests(unittest.TestCase):
 
         self.assertIn("ambiguous", result.response)
 
+    def test_personal_advice_does_not_receive_unrelated_thomistic_guardrails(self) -> None:
+        service = AquinasGenerationService(RecordingGenerator([]))
+
+        prompt = service.conversation_prompt(
+            [
+                ConversationMessage(
+                    role="user",
+                    text=(
+                        "I've been putting off an uncomfortable conversation. "
+                        "Should I wait until I feel ready?"
+                    ),
+                )
+            ],
+            personality=ConversationPersonality.BALANCED,
+        )
+
+        self.assertNotIn("change actualizes a prior potency", prompt)
+        self.assertNotIn("keep intellect and will distinct", prompt)
+        self.assertIn("Do not import a named Thomistic\nframework", prompt)
+
     def test_scholarly_personality_is_thomistic_rigorous_and_warm(self) -> None:
         service = AquinasGenerationService(RecordingGenerator([]))
 
@@ -1383,20 +1413,44 @@ class AquinasGenerationServiceTests(unittest.TestCase):
         self.assertIn("do not force theological framing", prompt)
         self.assertIn("Avoid\narchaic imitation, coldness, condescension", prompt)
 
-    def test_balanced_personality_is_warm_and_can_deepen_the_dialogue(self) -> None:
+    def test_balanced_personality_is_a_loving_candid_older_brother(self) -> None:
         service = AquinasGenerationService(RecordingGenerator([]))
 
         prompt = service.conversation_prompt(
             [ConversationMessage(role="user", text="Help me think this through.")],
             personality=ConversationPersonality.BALANCED,
         )
+        normalized_prompt = " ".join(prompt.split())
 
-        self.assertIn("warm and seasoned guide", prompt)
-        self.assertIn("hospitable", prompt)
-        self.assertIn("Match the depth", prompt)
-        self.assertIn("lean into intentional dialogue", prompt)
-        self.assertIn("ask a focused question", prompt)
-        self.assertIn("do not force a formal dialectic", prompt)
+        self.assertIn("intellectual depth and habits of Aquinas", normalized_prompt)
+        self.assertIn("what a thing is, the distinctions that matter", normalized_prompt)
+        self.assertIn("causes and ends, the strongest objection", normalized_prompt)
+        self.assertIn("natural conversation instead of staging a lecture", normalized_prompt)
+        self.assertIn("explain them immediately and simply", normalized_prompt)
+        self.assertIn("concrete example or analogy", normalized_prompt)
+        self.assertIn("scholarly in substance and casually articulate", normalized_prompt)
+        self.assertIn("Do not import a named Thomistic framework", normalized_prompt)
+        self.assertIn('labels such as "act of will,"', normalized_prompt)
+        self.assertIn("Depth means clarity and insight, not length", normalized_prompt)
+        self.assertIn("being prepared and feeling comfortable aren't the same", normalized_prompt)
+        self.assertIn("what has to be true for change to make sense", normalized_prompt)
+        self.assertIn("warmth and candor of a loving older brother", normalized_prompt)
+        self.assertIn("friendly, personal, curious", normalized_prompt)
+        self.assertIn('occasional inclusive "we,"', normalized_prompt)
+        self.assertIn("life and character", normalized_prompt)
+        self.assertIn("quaint openings", normalized_prompt)
+        self.assertIn("Respond to the person as well as the question", normalized_prompt)
+        self.assertIn("briefly acknowledge the specific place", normalized_prompt)
+        self.assertIn("selectively and sincerely", normalized_prompt)
+        self.assertIn("name hard truths with tact", normalized_prompt)
+        self.assertIn("Give substantial questions their full depth", normalized_prompt)
+        self.assertIn("clear, breathable sentences", normalized_prompt)
+        self.assertIn("companionable final thought", normalized_prompt)
+        self.assertIn("Stay proportionate", normalized_prompt)
+        self.assertIn("one illuminating distinction", normalized_prompt)
+        self.assertIn("two or three compact paragraphs", normalized_prompt)
+        self.assertIn("Never exceed three paragraphs", normalized_prompt)
+        self.assertIn("once the point is clear, stop", normalized_prompt)
 
     def test_socratic_personality_guides_without_withholding_answers(self) -> None:
         service = AquinasGenerationService(RecordingGenerator([]))

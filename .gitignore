@@ -7,5 +7,6 @@ gguf_conversion_env/
 aquinas_memory/
 models/
 evaluation/results/
+runs/
 data/
 .DS_Store

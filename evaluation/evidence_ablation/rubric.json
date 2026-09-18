@@ -1,0 +1,24 @@
+{
+  "method": "Assistant review of complete answers against the selected primary-source passages; exploratory and not an independent human or blinded adjudication. No keyword-only scoring.",
+  "correctness": "Pass requires a direct substantially correct answer to the question and no material factual contradiction or invented attribution. Stylistic weaknesses alone do not fail. Errors/unavailable output count separately and as unsuccessful answers in end-to-end totals.",
+  "evidence_fidelity": "Separately flag material contradictions of supplied evidence, misattribution to that evidence, or fabricated quotations/citations. Additional correct background knowledge is not automatically a failure. No-evidence runs are not scored for passage fidelity.",
+  "criteria": {
+    "scripture-lords-prayer": "Explains the prayer Jesus taught: Father, kingdom/will, provision, forgiveness and deliverance; not solely generic advice about prayer.",
+    "scripture-good-samaritan": "Compassionate Samaritan aids the robbed man whom priest and Levite pass; neighbor-love enacted in mercy across boundaries.",
+    "scripture-resurrection": "Jesus rises from death; empty tomb and encounter/announcement to followers, without confusing resurrection with a different event.",
+    "scripture-john14": "Jesus consoles disciples and speaks of the Father's house, himself as way/truth/life, and promised Spirit; no John 4 substitution.",
+    "doctrine-natural-law": "Rational creatures' participation in eternal law and reason's discernment of good and evil.",
+    "doctrine-virtue-prudence": "Practical right reason in action, deliberation and appropriate means; not mere fear/caution or speculative wisdom.",
+    "doctrine-soul": "First principle of life/form or act of living body, not a material organ or an independently physical body.",
+    "moral-lying": "Explains the Thomistic/Catholic prohibition of intentional falsehood; does not endorse lies as morally good merely for a good outcome.",
+    "history-nicaea": "Son truly divine, begotten not made, same substance as Father; rejects created-Son teaching.",
+    "history-constantinople": "First Constantinople, 381, second ecumenical council; Nicene faith and divine Holy Spirit, without confusing another council.",
+    "history-nicaea-ii": "Honor/veneration of images refers to the represented person; distinguishes it from divine worship, with no iconoclast reversal.",
+    "history-chalcedon": "One and same Christ/person in two natures, divine and human, without confusion/change/division/separation.",
+    "history-arius": "Early Christian teacher who denied the Son's coeternity/full equality and treated the Son as created; not an unrelated classical figure.",
+    "history-apostles-creed": "Christian profession summarizing Father, Jesus's incarnation/death/resurrection, Holy Spirit, Church, forgiveness and resurrection; no claim of certain joint composition by the twelve apostles.",
+    "history-nicene-creed": "One God, Father; Jesus truly divine/consubstantial and incarnate for salvation; Holy Spirit, Church, baptism and resurrection. No material doctrinal reversal.",
+    "abstain-current-pope": "Separately assess appropriate acknowledgment of missing current evidence. Historical pope names must not be presented as the current pope based on old text.",
+    "abstain-vatican-ii": "Separately assess evidence limits and whether dates are correct (1962-1965); correctly using model knowledge is distinct from claiming an old passage establishes those dates. Never substitute Constantinople II or another historical council."
+  }
+}

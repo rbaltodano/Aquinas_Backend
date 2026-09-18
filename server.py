@@ -12,7 +12,7 @@ from collections import defaultdict, deque
 from threading import Lock
 from typing import Sequence
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from PIL import Image, UnidentifiedImageError
@@ -371,12 +371,6 @@ class TodayInHistoryResponse(BaseModel):
     linked_node_id: str | None = None
 
 
-class FlagQuoteRequest(BaseModel):
-    conversation_id: str = Field(min_length=1, max_length=128)
-    response_id: str = Field(min_length=1, max_length=128)
-    quote_text: str = Field(min_length=1, max_length=4_000)
-
-
 class YourQuoteResponse(BaseModel):
     response_id: str
     quote_text: str
@@ -639,19 +633,20 @@ def _definition_response(record: DynamicDefinitionRecord) -> ContextualDefinitio
 
 
 def _flag_quote_if_notable(conversation_id: str, response_id: str, question: str) -> None:
-    """"Your Own Quote" Tier 2: an additive check riding inside the existing
-    tree-update analysis call. It must never fail or delay that call's own
-    result -- a broken or malformed notability check is swallowed here, not
-    surfaced as the /analyze route's HTTP error."""
+    """Evaluate "Your Own Quote" after the tree response has been sent.
+
+    This background enhancement must never change the already-completed tree
+    analysis result. Any model/runtime failure is logged and swallowed.
+    """
     if not is_heuristically_notable(question):
         return
     try:
         notability: GeneratedQuoteNotability = generation_service.assess_quote_notability(
             question
         )
-    except StructuredGenerationError:
-        logger.warning(
-            "Quote notability check failed for %s/%s; skipping.",
+    except Exception:
+        logger.exception(
+            "Background quote notability check failed for %s/%s; skipping.",
             conversation_id,
             response_id,
         )
@@ -909,20 +904,6 @@ def today_in_history(request: TodayInHistoryRequest):
         related_entity=entry.related_entity,
         linked_node_id=linked_node_id,
     )
-
-
-@app.post("/home/flag-quote")
-def flag_quote(request: FlagQuoteRequest):
-    conversation_id = validated_conversation_id(request.conversation_id)
-    response_id = validated_conversation_id(request.response_id)
-    persistent_tree_service.save_flagged_quote(
-        conversation_id=conversation_id,
-        response_id=response_id,
-        quote_text=request.quote_text,
-        source="user_flagged",
-        reason=None,
-    )
-    return {"status": "flagged"}
 
 
 @app.post(
@@ -1340,6 +1321,7 @@ def analyze_response_for_tree(
     conversation_id: str,
     response_id: str,
     request: ResponseTreeAnalysisRequest,
+    background_tasks: BackgroundTasks,
 ):
     conversation_id = validated_conversation_id(conversation_id)
     response_id = validated_conversation_id(response_id)
@@ -1357,7 +1339,12 @@ def analyze_response_for_tree(
                 branch_id=request.branch_id,
                 extraction=extraction,
             )
-            _flag_quote_if_notable(conversation_id, response_id, request.question)
+            background_tasks.add_task(
+                _flag_quote_if_notable,
+                conversation_id,
+                response_id,
+                request.question,
+            )
         except StructuredGenerationError as error:
             raise HTTPException(
                 status_code=502,

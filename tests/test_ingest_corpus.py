@@ -1,6 +1,24 @@
 import unittest
 
-from ingest_corpus import CHUNK_MAX_WORDS, chunk_text
+from ingest_corpus import CHUNK_MAX_WORDS, chunk_text, extract_plain_text
+
+
+class PlainTextEditionTests(unittest.TestCase):
+    def test_excludes_distributor_material_and_preserves_historical_prose(self):
+        source = {"id": "edition", "text_start": "^BOOK$",
+                  "text_end": "^Indexes$", "strip_link_numbers": True}
+        text = ("Modern introduction\r\nBOOK\r\n\r\nBegotten, not made. [12]\r\n"
+                "{T.N.: Modern annotation}\r\n_____\r\nIndexes\r\nWebsite license")
+        result = extract_plain_text(text, source)
+        self.assertIn("Begotten, not made.", result)
+        for excluded in ("Modern", "Website", "Indexes", "[12]", "_____"):
+            self.assertNotIn(excluded, result)
+
+    def test_missing_or_reversed_boundaries_fail_closed(self):
+        source = {"id": "edition", "text_start": "^BOOK$", "text_end": "^END$"}
+        for text in ("BOOK\nbody", "body\nEND", "END\nBOOK\nbody"):
+            with self.subTest(text=text), self.assertRaises(ValueError):
+                extract_plain_text(text, source)
 
 
 class ChunkTextTests(unittest.TestCase):

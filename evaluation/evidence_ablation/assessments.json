@@ -1,0 +1,261 @@
+{
+  "scripture-lords-prayer--retrieved": {
+    "core_correct": false,
+    "evidence_issue": false,
+    "note": "Relevant general prayer advice, but omits the Lord’s Prayer and its petitions.",
+    "correct": false
+  },
+  "scripture-lords-prayer--verified": {
+    "core_correct": true,
+    "evidence_issue": false,
+    "note": "Identifies Lord’s Prayer and main petitions; adds background outside supplied passage. Loose quotation Pray always is not in supplied evidence.",
+    "correct": true
+  },
+  "scripture-lords-prayer--none": {
+    "core_correct": true,
+    "evidence_issue": null,
+    "note": "Correct central prayer and interpretation; loose paraphrase presented in quotation marks.",
+    "correct": true
+  },
+  "scripture-good-samaritan--verified": {
+    "core_correct": true,
+    "evidence_issue": true,
+    "note": "Correct central story and moral, but wording confuses injured man/Samaritan and says repayment goes to Samaritan instead of innkeeper.",
+    "correct": false
+  },
+  "scripture-good-samaritan--none": {
+    "core_correct": true,
+    "evidence_issue": null,
+    "note": "Correct story/moral; asserts priest/Levite motives more confidently than the text warrants.",
+    "correct": true
+  },
+  "scripture-good-samaritan--retrieved": {
+    "core_correct": true,
+    "evidence_issue": false,
+    "note": "Correct central story/moral from model knowledge; calls Levite a member of priesthood, an imprecise background detail.",
+    "correct": true
+  },
+  "scripture-resurrection--none": {
+    "correct": false,
+    "evidence_issue": null,
+    "note": "Confuses angel/disciple sequence and being filled with Holy Ghost with Matthew resurrection narrative; incomplete answer."
+  },
+  "scripture-resurrection--retrieved": {
+    "correct": false,
+    "evidence_issue": false,
+    "note": "Incorrectly connects Good Samaritan to Luke’s resurrection narrative; replaces event account with unreliable generalizations."
+  },
+  "scripture-resurrection--verified": {
+    "correct": false,
+    "evidence_issue": true,
+    "note": "Misattributes Matthew details to Mark/Luke and fabricates quotation at John 20:18 despite correct Matthew passage."
+  },
+  "doctrine-natural-law--retrieved": {
+    "correct": true,
+    "evidence_issue": false,
+    "note": "Explains rational moral order and eternal law; secondary-precept changes summarized too broadly, but acknowledges first principles and exceptional circumstances."
+  },
+  "doctrine-natural-law--verified": {
+    "correct": false,
+    "core_correct": true,
+    "evidence_issue": true,
+    "note": "Definition substantially correct, but repeatedly attributes Aquinas’s supplied explanation to the Philosopher (Aristotle)."
+  },
+  "doctrine-natural-law--none": {
+    "correct": true,
+    "evidence_issue": null,
+    "note": "Substantially correct reason-discoverable universal morality; gives broad philosophical background rather than specifically Thomistic formula."
+  },
+  "doctrine-virtue-prudence--retrieved": {
+    "correct": false,
+    "evidence_issue": true,
+    "note": "Treats objection as conclusion: denies prudence is an intellectual virtue; misattributes Wisdom 9:14 to Aristotle."
+  },
+  "doctrine-virtue-prudence--verified": {
+    "correct": true,
+    "evidence_issue": false,
+    "note": "Correct practical intellectual virtue and right means toward good ends; acknowledges wisdom distinction."
+  },
+  "doctrine-virtue-prudence--none": {
+    "correct": true,
+    "evidence_issue": null,
+    "note": "Correct core practical intellectual virtue; informal three-aspect explanation rather than exact Thomistic taxonomy."
+  },
+  "doctrine-soul--none": {
+    "correct": false,
+    "evidence_issue": null,
+    "note": "Begins with principle of life but stops mid-explanation; does not deliver a complete answer."
+  },
+  "doctrine-soul--retrieved": {
+    "correct": true,
+    "evidence_issue": false,
+    "note": "Substantially correct principle of life/form of body; rational versus sensitive wording could misleadingly suggest multiple human souls."
+  },
+  "doctrine-soul--verified": {
+    "correct": false,
+    "core_correct": true,
+    "evidence_issue": true,
+    "note": "Core definition correct but invents vision in ear/tongue and transforms source calefaction (heating) into calcification."
+  },
+  "moral-lying--retrieved": {
+    "correct": false,
+    "evidence_issue": null,
+    "note": "No passages retrieved. Endorses permissible protective/white lies contrary to stated Thomistic rubric."
+  },
+  "moral-lying--none": {
+    "correct": false,
+    "evidence_issue": null,
+    "note": "Byte-identical to retrieved condition, which also supplied no evidence; permits protective lies."
+  },
+  "moral-lying--verified": {
+    "correct": false,
+    "evidence_issue": true,
+    "note": "Acknowledges lie is intrinsically evil, then justifies compelled lying for a lesser evil; says good end makes act good, contradicting supplied Aquinas passage."
+  },
+  "history-nicaea--retrieved": {
+    "correct": true,
+    "evidence_issue": false,
+    "note": "Correct Son’s divinity and eternal generation; comment that Trinity term was not fully developed is imprecise (term predates Nicaea)."
+  },
+  "history-nicaea--verified": {
+    "correct": true,
+    "evidence_issue": false,
+    "note": "Correct consubstantiality and rejection of created/mutable Son, with faithful source quotation."
+  },
+  "history-nicaea--none": {
+    "correct": false,
+    "core_correct": true,
+    "evidence_issue": null,
+    "note": "Correct Son conclusion, but frames controversy in relation to Holy Ghost and credits Nicaea with explicit Spirit-divinity settlement; conflates later doctrinal development."
+  },
+  "history-constantinople--none": {
+    "correct": false,
+    "evidence_issue": null,
+    "note": "Vague Holy Spirit discussion; omits 381 and identity as second ecumenical council, defers actual definitions."
+  },
+  "history-constantinople--retrieved": {
+    "correct": false,
+    "evidence_issue": true,
+    "note": "Dates First Constantinople to 382 and suggests Gregory the Great participated; confuses later letter/commentary with council."
+  },
+  "history-constantinople--verified": {
+    "correct": false,
+    "core_correct": true,
+    "evidence_issue": true,
+    "note": "Correct 381 and creed/Spirit account, but final sentence presents Second Ecumenical Council as another council; treats editorial excursus as council activity."
+  },
+  "history-nicaea-ii--retrieved": {
+    "correct": true,
+    "evidence_issue": false,
+    "note": "Correct veneration/prototype distinction with source support; stops mid-citation after already answering core question."
+  },
+  "history-nicaea-ii--verified": {
+    "correct": true,
+    "evidence_issue": false,
+    "note": "Accurate memory/prototype/veneration account and distinction from divine worship."
+  },
+  "history-nicaea-ii--none": {
+    "correct": true,
+    "evidence_issue": null,
+    "note": "Correct central veneration/worship and instructional purpose; Augustine attribution is unverified and should not be treated as an established citation."
+  },
+  "history-chalcedon--retrieved": {
+    "correct": false,
+    "evidence_issue": true,
+    "note": "States the core definition, but reverses the source's contrast between 'in two natures' and 'of two natures' and supplies an incorrect Greek form."
+  },
+  "history-chalcedon--verified": {
+    "correct": true,
+    "evidence_issue": false,
+    "note": "Correctly gives 451, one person in two natures, and the four Chalcedonian adverbs. The analogy is weak but does not reverse the doctrine."
+  },
+  "history-chalcedon--none": {
+    "correct": true,
+    "evidence_issue": null,
+    "note": "Correct 451 and one person in two natures without confusion or change. Calling it a question of Christ's relation to the Trinity is imprecise but not material."
+  },
+  "history-arius--retrieved": {
+    "correct": false,
+    "evidence_issue": true,
+    "note": "Gets the created-Son thesis but muddles begotten and generated, then incorrectly says the orthodox position held Christ was 'created but also begotten.'"
+  },
+  "history-arius--verified": {
+    "correct": true,
+    "evidence_issue": false,
+    "note": "Correctly identifies the Son as a creature, not consubstantial or co-eternal, and reports Nicaea's condemnation."
+  },
+  "history-arius--none": {
+    "correct": false,
+    "evidence_issue": null,
+    "note": "Correctly states Arius's central claim, but says the Church held Christ was 'not only created but also eternally begotten,' reversing the orthodox teaching."
+  },
+  "history-apostles-creed--retrieved": {
+    "correct": false,
+    "evidence_issue": true,
+    "note": "Describes the creed's content, but presents an apostolic-origin tradition and the apostles as the first bishops as settled history without qualification."
+  },
+  "history-apostles-creed--verified": {
+    "correct": true,
+    "evidence_issue": false,
+    "note": "Accurately summarizes the creed's Trinitarian structure and articles without asserting a certain joint composition by the twelve apostles."
+  },
+  "history-apostles-creed--none": {
+    "correct": true,
+    "evidence_issue": null,
+    "note": "Accurately gives the creed's central faith summary. It loosely includes sacraments and speculates about early Church Fathers, but neither changes the core answer."
+  },
+  "history-nicene-creed--retrieved": {
+    "correct": false,
+    "evidence_issue": true,
+    "note": "Adds Chalcedon's two-nature definition and Eucharistic teaching to the Nicene Creed, so the requested creed is materially misdescribed."
+  },
+  "history-nicene-creed--verified": {
+    "correct": true,
+    "evidence_issue": false,
+    "note": "Accurately states the Creed's articles on Father, Son, Holy Spirit, Church, baptism, resurrection, and life to come. The opening history is imprecise but not material to the text requested."
+  },
+  "history-nicene-creed--none": {
+    "correct": false,
+    "evidence_issue": null,
+    "note": "Gets 'begotten, not made' but imports Apostles' Creed wording and calls the Spirit 'Comforter,' which are not the Nicene Creed's formulation."
+  },
+  "scripture-john14--retrieved": {
+    "correct": true,
+    "evidence_issue": false,
+    "note": "Accurately covers the troubled disciples, Father's house, way/truth/life, Father-Son unity, Spirit, and promise not to leave them orphans."
+  },
+  "scripture-john14--verified": {
+    "correct": true,
+    "evidence_issue": false,
+    "note": "Matches the retrieved answer and accurately summarizes John 14's main teachings."
+  },
+  "scripture-john14--none": {
+    "correct": true,
+    "evidence_issue": null,
+    "note": "Accurately covers the Spirit, faith amid departure, way/truth/life, and return. 'Son of Man' is not this chapter's language but does not change the answer."
+  },
+  "abstain-current-pope--retrieved": {
+    "correct": false,
+    "appropriate_abstention": false,
+    "evidence_issue": null,
+    "note": "Answers an ungrounded time-sensitive question with the now-stale Pope Francis claim instead of stating that bundled historical material cannot establish a current officeholder."
+  },
+  "abstain-current-pope--none": {
+    "correct": false,
+    "appropriate_abstention": false,
+    "evidence_issue": null,
+    "note": "Answers an ungrounded time-sensitive question with the now-stale Pope Francis claim instead of stating that bundled historical material cannot establish a current officeholder."
+  },
+  "abstain-vatican-ii--retrieved": {
+    "correct": true,
+    "appropriate_abstention": false,
+    "evidence_issue": null,
+    "note": "The 1962–65 date is correct, but the supplied corpus evidence does not establish it. The model does not distinguish recalled knowledge from grounded knowledge."
+  },
+  "abstain-vatican-ii--none": {
+    "correct": true,
+    "appropriate_abstention": false,
+    "evidence_issue": null,
+    "note": "The 1962–65 date is correct, but with no supplied evidence it demonstrates recalled knowledge rather than grounded answering."
+  }
+}

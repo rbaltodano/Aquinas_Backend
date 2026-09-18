@@ -338,32 +338,18 @@ class ServerHTTPTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIsNone(response.json())
 
-    def test_flag_quote_then_your_quote_is_idempotent_within_the_same_day(self) -> None:
-        conversation_id = "quote-happy"
+    def test_quotes_cannot_be_flagged_manually(self) -> None:
         with TestClient(self.server.app) as client:
-            flagged = client.post(
+            response = client.post(
                 "/home/flag-quote",
                 json={
-                    "conversation_id": conversation_id,
+                    "conversation_id": "quote-manual-disabled",
                     "response_id": "response-1",
                     "quote_text": "A user-flagged quote worth remembering.",
                 },
             )
-            first_read = client.post(
-                "/home/your-quote",
-                json={"conversation_id": conversation_id},
-            )
-            second_read = client.post(
-                "/home/your-quote",
-                json={"conversation_id": conversation_id},
-            )
 
-        self.assertEqual(flagged.status_code, 200)
-        self.assertEqual(first_read.status_code, 200)
-        first_body = first_read.json()
-        self.assertEqual(first_body["response_id"], "response-1")
-        self.assertEqual(first_body["source"], "user_flagged")
-        self.assertEqual(second_read.json()["response_id"], first_body["response_id"])
+        self.assertEqual(response.status_code, 404)
 
     def test_analyze_response_flags_a_heuristically_notable_quote(self) -> None:
         conversation_id = "analyze-flags-quote"
@@ -423,6 +409,38 @@ class ServerHTTPTests(unittest.TestCase):
                     "branch_id": "branch-1",
                     "question": "What comes next?",
                     "response": "A short response.",
+                },
+            )
+            quote_response = client.post(
+                "/home/your-quote",
+                json={"conversation_id": conversation_id},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(quote_response.json())
+
+    def test_quote_notability_failure_does_not_fail_tree_analysis(self) -> None:
+        conversation_id = "analyze-quote-failure-isolated"
+        long_declarative_question = (
+            "Prudence seems to preserve freedom by making good action more ready, "
+            "rather than by forcing a person to act without deliberation."
+        )
+        self.server.generation_service.analyze_tree_update = lambda **_kwargs: GeneratedTreeUpdate(
+            subject_label="Prudence and freedom",
+            subject_summary="A summary about prudence and free action.",
+            insight_candidate=None,
+        )
+        self.server.generation_service.assess_quote_notability = lambda _quote_text: (
+            _ for _ in ()
+        ).throw(RuntimeError("quote classifier unavailable"))
+
+        with TestClient(self.server.app) as client:
+            response = client.post(
+                f"/insight-tree/{conversation_id}/responses/response-1/analyze",
+                json={
+                    "branch_id": "branch-1",
+                    "question": long_declarative_question,
+                    "response": "A response about prudence and free action.",
                 },
             )
             quote_response = client.post(

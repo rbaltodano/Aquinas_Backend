@@ -65,7 +65,7 @@ class PromptAssemblyTests(unittest.TestCase):
         )
         self.assertIn("You are Aquinas", tokenizer.messages[0]["content"])
         self.assertNotIn(
-            "warm and seasoned guide",
+            "care and ease of a loving older brother",
             tokenizer.messages[0]["content"],
         )
         self.assertIn(
