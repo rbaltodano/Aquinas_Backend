@@ -35,6 +35,9 @@ source of truth. Read [`INSIGHT-TREE.md`](../Aquinas-Foundations/INSIGHT-TREE.md
   Insight. Manually saved definitions are Insights.
 - Question of the Day, Node labels, response-driven tree extraction, Midpoint candidate generation,
   and Make Node child generation are live structured operations.
+- Home can also surface optional Loose Thread, Terms You Glossed Over, Today in History, and Your
+  Quote cards. Your Quote uses a cheap eligibility screen and a best-effort model assessment queued
+  after a successful tree-analysis response; it must never delay or invalidate that response.
 - Question of the Day uses the preemptible direct-JSON background path. Midpoint has a separate
   3,200-token candidate budget plus a 1,200-token weighted-center pass for five or more sources.
   Producing and repairing five genuine shared-region candidates requires more room than lighter
@@ -115,6 +118,9 @@ and produces a fragment, allowing the client to distinguish queued work from act
   generates, validates, and saves it.
 - `POST /home/question-of-the-day` — generates one grounded daily question from recent
   conversation context and at most four relevant Insights.
+- `POST /home/loose-thread`, `POST /home/glossed-terms`, `POST /home/today-in-history`, and
+  `POST /home/your-quote` — optional Home discovery cards; each returns `null` when no suitable
+  content exists. Today in History accepts an optional date override for deterministic tests.
 - `POST /ask` — legacy unstructured route; do not use for new iOS features.
 
 ### Relatedness and Insight Tree
@@ -208,6 +214,11 @@ litert_conversion_env/bin/python scripts/export_litert_aquinas.py \
   --source models/Aquinas-Final-HF \
   --output models/Aquinas-Final-LiteRT
 ```
+
+For a text-only package, use `--skip-vision`. This avoids exporting the vision tower and adapter,
+which is useful while on-device multimodal input remains post-launch work. Do not describe a
+text-only artifact as supporting image input; the development backend can still accept bounded
+image attachments through its full Gemma runtime.
 
 The current LiteRT toolchain has no standard 6-bit Gemma recipe. The non-destructive
 higher-precision phone candidate uses 8-bit fully connected weights with 4-bit embedding tables:
